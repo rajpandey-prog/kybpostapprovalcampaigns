@@ -1,0 +1,1458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Alaan post-KYB lifecycle — Gmail prototype</title>
+<style>
+  :root{
+    --gmail-bg:#f6f8fc;--gmail-blue:#c2e7ff;--gmail-blue-2:#d3e3fd;--gmail-text:#1f1f1f;--muted:#5f6368;
+    --line:#e5e7eb;--alaan-navy:#0b103b;--alaan-purple:#6c4fd3;--alaan-purple-2:#7c3aed;--alaan-soft:#f4f1ff;
+    --success:#137333;--warning:#9a6700;--danger:#b3261e;--shadow:0 1px 2px rgba(0,0,0,.08),0 2px 10px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--gmail-text);background:#fff;font-size:14px;overflow:hidden}
+  button,input,select{font:inherit}
+  button{cursor:pointer}
+  .hidden{display:none!important}
+
+  /* Browser-ish chrome */
+  .app{height:100vh;display:flex;flex-direction:column;background:var(--gmail-bg)}
+  .gmail-top{height:64px;display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--gmail-bg);border-bottom:1px solid rgba(0,0,0,.03)}
+  .hamburger{width:40px;height:40px;border-radius:50%;border:0;background:transparent;font-size:20px;color:#5f6368}
+  .gmail-brand{display:flex;align-items:center;gap:9px;min-width:165px;font-size:22px;color:#3c4043}
+  .gmail-m{width:28px;height:22px;position:relative;border-radius:4px;overflow:hidden;background:#fff;border:1px solid #e6e6e6}
+  .gmail-m:before{content:"";position:absolute;left:2px;top:3px;width:22px;height:16px;background:linear-gradient(32deg,transparent 41%,#ea4335 42% 53%,transparent 54%),linear-gradient(-32deg,transparent 41%,#4285f4 42% 53%,transparent 54%),linear-gradient(90deg,#fbbc04 0 23%,transparent 23% 77%,#34a853 77%)}
+  .search{height:46px;max-width:720px;flex:1;border-radius:24px;background:#eaf1fb;display:flex;align-items:center;padding:0 16px;gap:12px;color:#5f6368}
+  .search input{flex:1;border:0;outline:0;background:transparent;font-size:16px}
+  .top-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .iconbtn{width:38px;height:38px;border-radius:50%;border:0;background:transparent;color:#5f6368;font-size:17px}
+  .active-chip{padding:10px 14px;border-radius:20px;background:#eaf1fb;font-weight:600;color:#3c4043;display:flex;align-items:center;gap:7px}
+  .green-dot{width:9px;height:9px;border-radius:50%;background:#1e8e3e}
+  .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(145deg,#22126d,#6c4fd3);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+
+  .gmail-main{flex:1;display:flex;min-height:0}
+  .leftbar{width:242px;padding:8px 12px 18px 0;background:var(--gmail-bg);display:flex;flex-direction:column}
+  .compose{margin:8px 0 14px 8px;width:144px;height:54px;border-radius:16px;border:0;background:var(--gmail-blue);display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:0 18px;font-weight:600;box-shadow:0 1px 2px rgba(60,64,67,.2)}
+  .navitem{height:34px;border-radius:0 18px 18px 0;padding:0 15px 0 25px;display:flex;align-items:center;gap:14px;color:#3c4043;position:relative}
+  .navitem.active{background:var(--gmail-blue-2);font-weight:700}
+  .navitem .count{margin-left:auto;font-size:12px}
+  .labels-title{padding:22px 14px 10px 24px;font-weight:600}
+  .left-footer{margin-top:auto;color:#5f6368;padding:12px 24px;font-size:11px;line-height:1.5}
+
+  .workspace{flex:1;min-width:0;padding:8px 12px 12px 0;position:relative}
+  .surface{height:100%;border-radius:16px;background:#fff;box-shadow:0 1px 1px rgba(60,64,67,.05);overflow:hidden;display:flex;flex-direction:column}
+  .mail-toolbar{height:50px;border-bottom:1px solid #eef0f2;display:flex;align-items:center;padding:0 16px;gap:10px;color:#5f6368;flex-shrink:0}
+  .toolbar-spacer{flex:1}
+  .toolbar-chip{border:1px solid #dadce0;background:#fff;border-radius:18px;padding:7px 10px;color:#3c4043;font-size:12px}
+  .mail-list{overflow:auto;flex:1}
+  .mail-row{height:44px;border-bottom:1px solid #eceff1;display:grid;grid-template-columns:34px 34px 190px 1fr 110px;align-items:center;padding:0 12px;gap:4px;background:#f2f6fc;color:#3c4043;transition:background .25s}
+  .mail-row.unread{background:#fff;font-weight:700}
+  .mail-row.newmail{animation:newMail 2.3s ease}
+  @keyframes newMail{0%{background:#dff4ff}100%{background:#fff}}
+  .check{width:16px;height:16px;border:2px solid #8a8d91;border-radius:2px}
+  .star{font-size:18px;color:#b0b3b8}
+  .mail-sender{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mail-subject{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mail-preview{font-weight:400;color:#5f6368}
+  .mail-date{text-align:right;font-size:12px;white-space:nowrap}
+  .empty-state{padding:80px 20px;text-align:center;color:#5f6368}
+
+  /* reader */
+  .reader{flex:1;overflow:auto;background:#fff}
+  .reader-head{padding:18px 44px 12px 56px}
+  .reader-subject{font-size:22px;font-weight:400;margin:0 0 18px 0;display:flex;align-items:center;gap:10px}
+  .inbox-label{font-size:11px;background:#e8eaed;color:#5f6368;padding:3px 6px;border-radius:4px}
+  .sender-line{display:flex;align-items:flex-start;gap:12px}
+  .sender-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(145deg,#1a1f59,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .sender-meta{flex:1;line-height:1.4}
+  .sender-meta strong{font-size:14px}
+  .sender-address{color:#5f6368;font-size:12px}
+  .timestamp{color:#5f6368;font-size:12px;margin-left:auto;white-space:nowrap}
+  .email-wrap{max-width:660px;margin:4px auto 70px;padding:0 18px}
+  .alaan-banner{height:108px;border-radius:10px;background:radial-gradient(circle at 85% 10%,#6d27f2 0,transparent 31%),linear-gradient(120deg,#080b29 0%,#14114c 58%,#6b2ef5 100%);color:#fff;position:relative;overflow:hidden;margin:24px 0 30px;display:flex;align-items:center;padding:0 28px}
+  .alaan-banner .eyebrow{font-size:13px;color:#c8c9eb;margin-bottom:8px}
+  .alaan-banner .headline{font-size:23px;font-weight:700}
+  .alaan-banner .logo{position:absolute;right:20px;top:16px;font-weight:800;letter-spacing:2px}
+  .card-art{position:absolute;right:85px;top:25px;width:110px;height:60px;transform:rotate(-10deg)}
+  .card-art .c1,.card-art .c2{position:absolute;width:95px;height:56px;border-radius:8px;background:linear-gradient(145deg,#e8e6f5,#8485a5);box-shadow:0 8px 18px rgba(0,0,0,.25)}
+  .card-art .c2{left:28px;top:15px;background:linear-gradient(145deg,#23264d,#101326)}
+  .card-art .visa{position:absolute;right:8px;bottom:7px;color:#fff;font-weight:700;font-size:10px}
+  .email-body{color:#555a78;font-size:14px;line-height:1.55}
+  .email-body p{margin:0 0 17px}
+  .email-body strong{color:#1d234f}
+  .lead{font-weight:700;color:#1d234f;margin-top:8px!important}
+  .cta{display:inline-flex;align-items:center;justify-content:center;min-width:165px;border-radius:8px;border:0;background:var(--alaan-navy);color:#fff;padding:12px 18px;font-weight:700;text-decoration:none;margin:5px 0 18px}
+  .cta.secondary{background:#fff;color:var(--alaan-navy);border:1px solid #cfd2e2}
+  .cta.purple{background:var(--alaan-purple)}
+  .cta-row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 18px}
+  .design-block{border:1px solid #e3e5ef;border-radius:10px;margin:14px 0 22px;background:#fff;overflow:hidden}
+  .product-grid{display:grid;grid-template-columns:1fr 1fr}
+  .product-col{padding:18px 20px}
+  .product-col+ .product-col{border-left:1px solid #e7e9f2}
+  .product-title{font-size:16px;font-weight:700;color:#171d49;margin-bottom:10px}
+  .product-col ul,.fork-card ul{margin:0;padding-left:17px}
+  .product-col li{margin:7px 0}
+  .fork-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 22px}
+  .fork-card{border:1px solid #e3e5ef;border-radius:12px;padding:18px;background:#fff;display:flex;flex-direction:column}
+  .fork-card h4{margin:0 0 8px;color:#171d49;font-size:15px}
+  .fork-card p{font-size:13px;flex:1}
+  .fork-card .cta{width:100%;margin-bottom:0}
+  .step-strip{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid #e4e6f0;border-radius:10px;overflow:hidden;margin:14px 0 22px}
+  .step{padding:18px 12px;text-align:center;position:relative;color:#242a56}
+  .step+.step{border-left:1px solid #e4e6f0}
+  .step-num{width:28px;height:28px;border-radius:50%;background:#f0edff;color:#6c4fd3;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .checklist{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 8px}
+  .checktile{border:1px solid #e3e5ef;border-radius:10px;padding:12px;text-align:center;color:#242a56;min-height:118px;position:relative}
+  .checktile.next{outline:2px solid #d8cdfc;background:#fbfaff}
+  .thumb{height:54px;border-radius:8px;background:#f7f6fc;margin-bottom:9px;display:flex;align-items:center;justify-content:center;font-size:25px}
+  .tinyflag{position:absolute;top:8px;right:8px;font-size:9px;background:#e8e0ff;color:#5c3dc2;padding:3px 6px;border-radius:10px}
+  .compare{width:100%;border-collapse:collapse;font-size:13px}
+  .compare th{background:#fafafe;color:#3e456e;padding:12px;text-align:left;border-bottom:1px solid #e5e7ef}
+  .compare td{padding:12px;border-bottom:1px solid #eceef4;vertical-align:top}
+  .compare tr:last-child td{border-bottom:0}
+  .callout{padding:15px 16px;border-radius:10px;background:#f7f3ff;border:1px solid #e4d9ff;color:#44326f;margin:14px 0 20px}
+  .open-marker{padding:12px 14px;border-radius:9px;background:#fff7df;border:1px solid #f4d276;color:#785d00;font-size:12px;margin:10px 0 16px}
+  .timeline{display:grid;gap:0;border:1px solid #e2e5ef;border-radius:10px;margin:14px 0 22px;overflow:hidden}
+  .timeline-item{padding:14px 16px;display:grid;grid-template-columns:34px 1fr;gap:10px}
+  .timeline-item+.timeline-item{border-top:1px solid #e6e8f0}
+  .timeline-n{width:28px;height:28px;border-radius:50%;background:#ede8ff;color:#6043c0;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .attachment{border:1px solid #dadce0;border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;margin:14px 0 18px;background:#fafafa}
+  .pdf{width:36px;height:44px;border-radius:4px;background:#ea4335;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}
+  .footer-box{margin-top:30px;background:#0d123f;color:#d8daf0;border-radius:10px;padding:22px 24px;font-size:11px;line-height:1.6}
+  .footer-box strong,.footer-box a{color:#fff}
+  .footer-divider{height:1px;background:#272c5b;margin:16px 0}
+  .unsubscribe{color:#fff;text-decoration:underline;cursor:pointer}
+  .gmail-replybar{max-width:660px;margin:0 auto 60px;padding:0 18px;display:flex;gap:8px}
+  .replybtn{border:1px solid #dadce0;background:#fff;border-radius:22px;padding:9px 16px;color:#3c4043}
+
+  /* simulator */
+  .sim-panel{position:absolute;right:24px;top:70px;width:282px;z-index:20;border-radius:16px;background:#111735;color:#fff;box-shadow:0 12px 30px rgba(11,16,59,.28);overflow:hidden}
+  .sim-head{padding:15px 16px 12px;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid #2d3357}
+  .sim-head h3{font-size:13px;margin:0 0 2px}
+  .sim-head p{font-size:10px;color:#aeb4da;margin:0}
+  .sim-close{margin-left:auto;background:transparent;border:0;color:#aeb4da;font-size:18px}
+  .sim-body{padding:12px 14px 14px}
+  .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  .statusbox{padding:9px;border-radius:10px;background:#1b2148}
+  .statusbox .k{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#9fa7d0}
+  .statusbox .v{font-size:14px;font-weight:700;margin-top:3px}
+  .sim-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}
+  .simbtn{border:1px solid #3d446c;background:#20274f;color:#fff;border-radius:9px;padding:9px 10px;font-size:11px;font-weight:700}
+  .simbtn.primary{background:#6c4fd3;border-color:#6c4fd3}
+  .simbtn.full{grid-column:1/-1}
+  .flags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .flag{font-size:9px;padding:4px 6px;border-radius:10px;background:#242b57;color:#bcc3ea}
+  .flag.on{background:#e8e1ff;color:#5a3dc0}
+  .sim-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid #282f57;font-size:11px}
+  .toggle{width:38px;height:21px;border-radius:12px;background:#3c4369;position:relative;border:0;padding:0}
+  .toggle:after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s}
+  .toggle.on{background:#6c4fd3}.toggle.on:after{left:20px}
+  .sim-links{display:flex;gap:6px;margin-top:8px}
+  .sim-link{border:0;background:transparent;color:#c2c9ef;text-decoration:underline;font-size:10px;padding:0}
+  .journey-note{margin-top:8px;padding:8px 9px;border-radius:8px;background:#22284e;color:#c7cbea;font-size:10px;line-height:1.4}
+
+  /* time advance */
+  .advance-overlay{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:370px;background:#fff;border:1px solid #dfe2e8;border-radius:14px;box-shadow:var(--shadow);padding:13px 15px;z-index:60}
+  .advance-title{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:12px}
+  .progress{height:7px;background:#eef0f5;border-radius:10px;overflow:hidden;margin:10px 0 7px}
+  .progress>div{height:100%;width:0;background:#6c4fd3;transition:width 2.9s linear}
+  .skip{border:0;background:transparent;color:#5f43c5;font-weight:700;font-size:11px}
+
+  /* fake Alaan */
+  .alaan-shell{height:100%;display:flex;flex-direction:column;background:#f7f8fb}
+  .alaan-top{height:64px;background:#0a0e35;color:#fff;display:flex;align-items:center;padding:0 28px;gap:24px}
+  .alaan-wordmark{font-weight:800;letter-spacing:3px}
+  .alaan-back{margin-left:auto;border:1px solid #3e446c;background:transparent;color:#fff;border-radius:8px;padding:8px 12px}
+  .alaan-content{flex:1;overflow:auto;padding:42px 38px}
+  .product-shell{max-width:880px;margin:0 auto}
+  .product-shell h1{font-size:28px;margin:0 0 8px;color:#10163f}
+  .product-shell .sub{color:#68708a;margin-bottom:28px}
+  .app-card{background:#fff;border:1px solid #e3e6ef;border-radius:14px;box-shadow:0 6px 18px rgba(18,23,64,.05);padding:24px;margin-bottom:18px}
+  .formrow{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:#626a82;margin-bottom:6px}
+  .field input,.field select{width:100%;height:42px;border:1px solid #d5d9e3;border-radius:8px;padding:0 11px;outline:none;background:#fff}
+  .field input:focus,.field select:focus{border-color:#6c4fd3;box-shadow:0 0 0 3px rgba(108,79,211,.1)}
+  .big-action{border:0;border-radius:9px;background:#11163e;color:#fff;padding:12px 18px;font-weight:700}
+  .outline-action{border:1px solid #cfd3df;border-radius:9px;background:#fff;color:#252b52;padding:12px 18px;font-weight:700}
+  .product-select{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .product-choice{border:1px solid #e0e3ec;border-radius:14px;background:#fff;padding:22px;min-height:220px;display:flex;flex-direction:column}
+  .product-choice h3{color:#121840;font-size:20px;margin:12px 0 8px}
+  .product-choice p{color:#68708a;line-height:1.5;flex:1}
+  .choice-icon{width:46px;height:46px;border-radius:12px;background:#eee9ff;color:#6949d4;display:flex;align-items:center;justify-content:center;font-size:22px}
+  .bank-card{display:grid;grid-template-columns:1.4fr 1fr;gap:22px}
+  .bank-details{border:1px solid #e3e6ee;border-radius:12px;padding:16px}
+  .bank-line{padding:10px 0;border-bottom:1px solid #edf0f4;display:flex;justify-content:space-between;gap:20px}
+  .bank-line:last-child{border-bottom:0}
+  .bank-line .lab{color:#788096;font-size:12px}.bank-line .val{font-weight:700;color:#20264d;text-align:right}
+  .wallet-balance{font-size:34px;font-weight:800;color:#121840;margin:8px 0 26px}
+  .card-preview{height:200px;border-radius:18px;background:linear-gradient(135deg,#0b103b,#26295b);color:#fff;padding:22px;position:relative;max-width:360px}
+  .card-preview .brand{letter-spacing:2px;font-weight:800}.card-preview .number{position:absolute;left:22px;bottom:55px;letter-spacing:3px;font-size:18px}.card-preview .name{position:absolute;left:22px;bottom:22px;font-size:12px}.card-preview .visa2{position:absolute;right:22px;bottom:22px;font-weight:800}
+  .notice{padding:12px 14px;border-radius:10px;background:#f2f5ff;color:#3c4874;border:1px solid #dce3ff;margin:14px 0}
+  .notice.warn{background:#fff7e6;border-color:#f6d58d;color:#77590f}
+  .notice.good{background:#ecf7ed;border-color:#b9e0bf;color:#256333}
+  .booking-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+  .slotbtn{border:1px solid #d8dce7;border-radius:9px;background:#fff;padding:12px}
+
+  /* modals + toast + summary */
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#323232;color:#fff;padding:11px 16px;border-radius:6px;font-size:12px;z-index:100;box-shadow:var(--shadow)}
+  .modalback{position:fixed;inset:0;background:rgba(9,13,45,.48);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px}
+  .modal{width:min(820px,92vw);max-height:82vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .modalhead{padding:18px 20px;border-bottom:1px solid #e8eaf0;display:flex;align-items:center}
+  .modalhead h2{margin:0;font-size:18px;color:#151a42}.modalhead button{margin-left:auto;border:0;background:transparent;font-size:20px;color:#60677d}
+  .modalbody{padding:18px 20px}
+  .summary-table{width:100%;border-collapse:collapse;font-size:12px}
+  .summary-table th,.summary-table td{text-align:left;padding:10px;border-bottom:1px solid #eceef3;vertical-align:top}
+  .summary-table th{color:#666e84;background:#fafbfe;position:sticky;top:0}
+  .statuspill{display:inline-block;padding:3px 7px;border-radius:10px;background:#eef1f6;color:#626a80;font-size:10px}
+  .statuspill.green{background:#e7f4e8;color:#256333}
+  .state-json{background:#0e1339;color:#d7daf0;padding:14px;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:pre-wrap;line-height:1.5}
+  .system-row{padding:14px 18px;border-bottom:1px solid #eceff2;background:#fff8e8;color:#6f5613;display:flex;gap:10px;align-items:center}
+  .handoff-row{padding:14px 18px;border-bottom:1px solid #eceff2;background:#eef6ff;color:#31527a;display:flex;gap:10px;align-items:center}
+
+  @media (max-width:1180px){.sim-panel{width:248px}.mail-row{grid-template-columns:30px 30px 150px 1fr 84px}.leftbar{width:210px}}
+  @media (max-width:920px){.leftbar{display:none}.sim-panel{right:12px;top:66px}.email-wrap{max-width:620px}.product-grid,.fork-grid,.product-select,.bank-card{grid-template-columns:1fr}.product-col+.product-col{border-left:0;border-top:1px solid #e7e9f2}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="gmail-top" id="gmailTop">
+    <button class="hamburger" aria-label="Menu">☰</button>
+    <div class="gmail-brand"><div class="gmail-m"></div><span>Gmail</span></div>
+    <div class="search">⌕ <input aria-label="Search mail" placeholder="Search mail" /></div>
+    <div class="top-actions">
+      <div class="active-chip"><span class="green-dot"></span> Active ▾</div>
+      <button class="iconbtn" title="Help">?</button><button class="iconbtn" title="Settings">⚙</button><button class="iconbtn" title="Apps">⋮⋮</button><div class="avatar">R</div>
+    </div>
+  </header>
+
+  <div class="gmail-main">
+    <aside class="leftbar" id="leftbar">
+      <button class="compose" onclick="toast('Compose is decorative in this prototype')"><span style="font-size:20px">✎</span> Compose</button>
+      <div class="navitem active">▣ <span>Inbox</span><span class="count" id="inboxCount">4</span></div>
+      <div class="navitem">☆ <span>Starred</span></div>
+      <div class="navitem">◷ <span>Snoozed</span></div>
+      <div class="navitem">▷ <span>Sent</span></div>
+      <div class="navitem">▱ <span>Drafts</span><span class="count">1</span></div>
+      <div class="navitem">⌄ <span>More</span></div>
+      <div class="labels-title">Labels <span style="float:right">＋</span></div>
+      <div class="left-footer">Alaan lifecycle prototype<br>Rana Haddad · Meridian Trading</div>
+    </aside>
+
+    <main class="workspace">
+      <div class="surface" id="surface"></div>
+
+      <aside class="sim-panel" id="simPanel">
+        <div class="sim-head"><div><h3>Lifecycle simulator</h3><p>GRO-2132 · compressed journey</p></div><button class="sim-close" onclick="toggleSim()">×</button></div>
+        <div class="sim-body">
+          <div class="status-grid"><div class="statusbox"><div class="k">Simulated day</div><div class="v" id="simDay">0</div></div><div class="statusbox"><div class="k">Stage</div><div class="v" id="simStage">C0</div></div></div>
+          <div class="sim-actions">
+            <button class="simbtn primary" onclick="queueAdvance(1)">Next day</button>
+            <button class="simbtn" onclick="queueAdvance(3)">+3 days</button>
+            <button class="simbtn" onclick="queueAdvance(7)">+7 days</button>
+            <button class="simbtn" onclick="showSummary()">Summary</button>
+            <button class="simbtn full" onclick="resetPrototype()">Reset journey</button>
+          </div>
+          <div class="sim-row"><span>Cardholder is Admin</span><button class="toggle" id="personaToggle" onclick="togglePersona()"></button></div>
+          <div class="sim-row"><span>Optional FT.1 demo event</span><button class="simbtn" style="padding:6px 8px" onclick="markTransferSent()">Mark sent</button></div>
+          <div class="flags" id="flags"></div>
+          <div class="journey-note" id="journeyNote">Day 0 welcome email is waiting in the inbox.</div>
+          <div class="sim-links"><button class="sim-link" onclick="showState()">View state</button><button class="sim-link" onclick="showAllTemplates()">Email map</button></div>
+        </div>
+      </aside>
+
+      <div class="advance-overlay hidden" id="advanceOverlay"><div class="advance-title"><span id="advanceText">Advancing…</span><button class="skip" onclick="skipAdvance()">Skip</button></div><div class="progress"><div id="advanceProgress"></div></div><div style="font-size:10px;color:#727783">Time passes even on days with no scheduled email.</div></div>
+    </main>
+  </div>
+</div>
+<div id="modalRoot"></div><div id="toastRoot"></div>
+
+<script>
+const PERSON = {first_name:'Rana', admin_name:'Rana Haddad', company_name:'Meridian Trading', cardholder_name:'Karim Nasser', payer_name:'Ahmed Farouk', im_first_name:'Priya Menon'};
+const initialState = () => ({
+  day:0, stageStartDay:0, loggedIn:false, productSelected:null, cardCreated:false, cardActivated:false, cardActivationDueDay:null,
+  funded:false,balance:0,purchased:false,imAssigned:false,requestFundsSent:false,requestFundsDay:null,transferMarkedSent:false,transferSentDay:null,
+  unsubscribed:false,humanReview:false,cardholderIsAdmin:false,emails:[],actions:[],seq:0,currentView:'inbox',currentEmailId:null,appTarget:null,
+  payHandoffShown:false,queuedStageNotice:null
+});
+let S = initialState();
+let advanceQueue = 0, advanceTimer = null;
+
+const templates = {
+  'C0.0': {subject:'Your Alaan account is ready',preview:"Here's what you can set up first.",banner:true,recipient:'admin',cta:'login-select'},
+  'C0.1': {subject:"Which one's the problem?",preview:'Team spending, or paying suppliers?',banner:false,recipient:'admin',cta:null},
+  'C0.3': {subject:'It takes about ten minutes',preview:'Card, funds, first purchase.',banner:false,recipient:'admin',cta:'login-select'},
+  'C0.7': {subject:'Want a walkthrough?',preview:'About twenty minutes, end to end.',banner:false,recipient:'admin',cta:'book'},
+  'C1.0': {subject:'Create your first company card',preview:'Ready to use in minutes.',banner:true,recipient:'admin',cta:'create-card'},
+  'C1.1': {subject:'One card is enough to start',preview:"You don't need the whole team sorted.",banner:false,recipient:'admin',cta:'create-card'},
+  'C1.3': {subject:'What month-end looks like after',preview:'Nothing to chase, nothing to rebuild.',banner:false,recipient:'admin',cta:'create-card'},
+  'C1.7': {subject:'Want a walkthrough?',preview:'About twenty minutes, end to end.',banner:false,recipient:'admin',cta:'book'},
+  'C2.0': {subject:'Your card is active',preview:'One more step before it works.',banner:true,recipient:'admin',cta:'view-bank'},
+  'C2.1': {subject:'How funding actually works',preview:'Two steps, and what happens after.',banner:false,recipient:'admin',cta:'view-bank'},
+  'C2.3': {subject:'Forward this to whoever pays',preview:'Details attached, ready to send on.',banner:false,recipient:'admin',cta:'request-funds'},
+  'C2.3-RF': {subject:'Your funding request is still open',preview:'Nothing has arrived yet.',banner:false,recipient:'admin',cta:'view-bank'},
+  'C2.7': {subject:"Where's the funding stuck?",preview:'Approvals, finance, or something else?',banner:false,recipient:'admin',cta:'book'},
+  'C2.14': {subject:'Your account is still ready',preview:'Whenever the timing works.',banner:false,recipient:'admin',cta:'view-bank'},
+  'RF.3': {subject:'Rana Haddad asked me to send these details',preview:'Transfer details for Meridian Trading.',banner:false,recipient:'payer',cta:'view-bank'},
+  'FT.1': {subject:"Your transfer hasn't arrived yet",preview:"Let's find out where it is.",banner:false,recipient:'admin',cta:'wallet'},
+  'C3.0': {subject:'The card is ready to use',preview:"Here's where the details are.",banner:true,recipient:'cardholder',cta:'purchase'},
+  'C3.1': {subject:'The card is yours to use',preview:'No need to ask first.',banner:false,recipient:'cardholder',cta:'card-detail'},
+  'C3.3': {subject:'If a payment gets declined',preview:"It's usually the balance, not the card.",banner:false,recipient:'cardholder',cta:'wallet'},
+  'C3.7': {subject:'Has the card been used?',preview:"Checking it's with the right person.",banner:false,recipient:'admin',cta:'book'},
+  'IM.0': {subject:'Priya Menon is looking after your setup',preview:'Your point of contact at Alaan.',banner:false,recipient:'admin',cta:'book-im'}
+};
+
+function merge(str){return String(str).replaceAll('{{first_name}}',PERSON.first_name).replaceAll('{{company_name}}',PERSON.company_name).replaceAll('{{admin_name}}',PERSON.admin_name).replaceAll('{{cardholder_name}}',S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name).replaceAll('{{payer_name}}',PERSON.payer_name).replaceAll('{{im_first_name}}',PERSON.im_first_name)}
+
+function deriveStage(){
+  if(S.imAssigned) return 'IM';
+  if(S.unsubscribed) return 'STOP';
+  if(S.humanReview) return 'HUMAN';
+  if(!S.productSelected) return 'C0';
+  if(S.productSelected==='pay') return 'PAY';
+  if(!S.cardCreated) return 'C1';
+  if(!S.cardActivated) return 'ACT';
+  if(!S.funded) return 'C2';
+  if(!S.purchased) return 'C3';
+  return 'EXIT';
+}
+function stageLabel(){const x=deriveStage();return ({C0:'C0 · Choose product',C1:'C1 · Create card',ACT:'Activation window',C2:'C2 · Add funds',C3:'C3 · First purchase',PAY:'Super Pay handoff',IM:'IM handoff',EXIT:'Exited',STOP:'Unsubscribed',HUMAN:'Human review'})[x]||x}
+function logAction(label){S.actions.push({day:S.day,label});}
+function sentTodayFor(recipient){return S.emails.some(e=>e.day===S.day && e.recipient===recipient)}
+function emailExists(slot){return S.emails.some(e=>e.slot===slot)}
+function deliver(slot,{extra=false}={}){
+  if(emailExists(slot)) return;
+  const t=templates[slot]; if(!t) return;
+  S.seq++;
+  const rec=t.recipient;
+  const recipientName=rec==='payer'?PERSON.payer_name:(rec==='cardholder'?(S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name):PERSON.admin_name);
+  S.emails.push({id:'m'+S.seq,slot,day:S.day,subject:merge(t.subject),preview:merge(t.preview),banner:t.banner,recipient:rec,recipientName,read:false,newmail:true,seq:S.seq,extra});
+  logAction(`Email ${slot} sent to ${recipientName}`);
+  setTimeout(()=>{const e=S.emails.find(x=>x.slot===slot);if(e)e.newmail=false;},2400);
+}
+function maybeDeliverStageEmail(){
+  if(S.imAssigned||S.unsubscribed||S.humanReview) return;
+  const st=deriveStage();
+  if(st==='PAY'){if(!S.payHandoffShown){S.payHandoffShown=true;logAction('Super Pay selected — lifecycle handed off');}return;}
+  if(st==='ACT'||st==='EXIT') return;
+  const age=S.day-S.stageStartDay;
+  let slot=null;
+  if(st==='C0') slot=({0:'C0.0',1:'C0.1',3:'C0.3',7:'C0.7'})[age];
+  if(st==='C1') slot=({0:'C1.0',1:'C1.1',3:'C1.3',7:'C1.7'})[age];
+  if(st==='C2'){
+    if(age===3) slot=S.requestFundsSent?'C2.3-RF':'C2.3';
+    else slot=({0:'C2.0',1:'C2.1',7:'C2.7',14:'C2.14'})[age];
+    if(age>=21 && !S.funded){S.humanReview=true;logAction('No fund-in by day 21 of C2 — moved to human review queue');return;}
+  }
+  if(st==='C3') slot=({0:'C3.0',1:'C3.1',3:'C3.3',7:'C3.7'})[age];
+  if(slot && !sentTodayFor(templates[slot].recipient)) deliver(slot);
+}
+function processExtraEmails(){
+  if(S.imAssigned||S.unsubscribed||S.funded) return;
+  if(S.requestFundsSent && S.requestFundsDay!==null && S.day-S.requestFundsDay===3 && !emailExists('RF.3') && !sentTodayFor('payer')) deliver('RF.3',{extra:true});
+  if(S.transferMarkedSent && S.transferSentDay!==null && S.day-S.transferSentDay===1 && !emailExists('FT.1')){
+    if(!sentTodayFor('admin')) deliver('FT.1',{extra:true}); else logAction('FT.1 suppressed by the 24-hour recipient frequency cap');
+  }
+}
+function processDay(){
+  if(S.cardCreated && !S.cardActivated && S.cardActivationDueDay!==null && S.day>=S.cardActivationDueDay){
+    S.cardActivated=true;S.stageStartDay=S.day;logAction('First company card activated');
+  }
+  maybeDeliverStageEmail();
+  processExtraEmails();
+  S.currentView='inbox';S.currentEmailId=null;render();
+}
+
+function queueAdvance(n){if(advanceQueue>0)return;advanceQueue=n;advanceOne();}
+function advanceOne(){
+  if(advanceQueue<=0){document.getElementById('advanceOverlay').classList.add('hidden');return;}
+  const ov=document.getElementById('advanceOverlay'),bar=document.getElementById('advanceProgress');ov.classList.remove('hidden');document.getElementById('advanceText').textContent=`Advancing to day ${S.day+1}…`;
+  bar.style.transition='none';bar.style.width='0%';requestAnimationFrame(()=>requestAnimationFrame(()=>{bar.style.transition='width 2.9s linear';bar.style.width='100%';}));
+  advanceTimer=setTimeout(()=>finishAdvance(),3000);
+}
+function finishAdvance(){if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}S.day++;advanceQueue--;processDay();if(advanceQueue>0)setTimeout(advanceOne,120);else document.getElementById('advanceOverlay').classList.add('hidden');}
+function skipAdvance(){finishAdvance()}
+
+function updateStageAfterAction(previousStage){
+  const next=deriveStage();
+  if(next!==previousStage){
+    if(next==='C1'||next==='C3') S.stageStartDay=S.day+1;
+    else if(next==='C2') S.stageStartDay=S.day;
+    else if(next==='C0') S.stageStartDay=S.day;
+    logAction(`Stage changed: ${previousStage} → ${next}`);
+  }
+}
+
+function seed(){
+  S.seq=3;
+  S.emails=[
+    {id:'x1',slot:'X.NOTION',day:-1,subject:'Weekly project digest',preview:'3 updates across your workspace',banner:false,recipient:'other',recipientName:'Notion',read:true,newmail:false,seq:1,extra:true},
+    {id:'x2',slot:'X.LINEAR',day:-1,subject:'GRO-2132 was updated',preview:'New comments and status changes',banner:false,recipient:'other',recipientName:'Linear',read:true,newmail:false,seq:2,extra:true},
+    {id:'x3',slot:'X.FIGMA',day:-1,subject:'New comments in Growth lifecycle',preview:'2 people commented on your file',banner:false,recipient:'other',recipientName:'Figma',read:true,newmail:false,seq:3,extra:true}
+  ];
+  deliver('C0.0');
+}
+
+function render(){
+  updateSimulator();
+  const surface=document.getElementById('surface');
+  if(S.currentView==='inbox') surface.innerHTML=renderInbox();
+  else if(S.currentView==='reader') surface.innerHTML=renderReader();
+  else if(S.currentView==='alaan') surface.innerHTML=renderAlaan();
+}
+function inboxRows(){return [...S.emails].sort((a,b)=>b.day-a.day||b.seq-a.seq)}
+function renderInbox(){
+  const rows=inboxRows();
+  let top='';
+  if(S.humanReview) top='<div class="system-row">⚑ <strong>Human review queue:</strong> No fund-in by C2 day 21. Automated lifecycle is stopped.</div>';
+  if(deriveStage()==='PAY') top='<div class="handoff-row">↗ <strong>Super Pay handoff:</strong> Product selected. GRO-2132 card lifecycle has exited.</div>';
+  if(deriveStage()==='EXIT') top='<div class="handoff-row">✓ <strong>Lifecycle complete:</strong> First successful purchase recorded.</div>';
+  return `<div class="mail-toolbar"><button class="iconbtn" onclick="toast('Select all')">▢</button><button class="iconbtn" onclick="toast('Refresh')">↻</button><button class="iconbtn" onclick="toast('More')">⋮</button><div class="toolbar-spacer"></div><span style="font-size:12px">1–${rows.length} of ${rows.length}</span><button class="iconbtn">‹</button><button class="iconbtn">›</button></div>${top}<div class="mail-list">${rows.map(renderMailRow).join('')}</div>`;
+}
+function renderMailRow(e){
+  const lifecycle=!e.slot.startsWith('X.');
+  const sender=lifecycle?'Sonia Rahman':e.recipientName;
+  const date=e.day===S.day?'Now':e.day<0?'Yesterday':`Day ${e.day}`;
+  return `<div class="mail-row ${e.read?'':'unread'} ${e.newmail?'newmail':''}" onclick="openEmail('${e.id}')"><div class="check" onclick="event.stopPropagation()"></div><div class="star" onclick="event.stopPropagation();this.textContent=this.textContent==='★'?'☆':'★';this.style.color='#f4b400'">☆</div><div class="mail-sender">${sender}</div><div class="mail-subject">${esc(e.subject)} <span class="mail-preview">— ${esc(e.preview)}</span></div><div class="mail-date">${date}</div></div>`
+}
+function openEmail(id){const e=S.emails.find(x=>x.id===id);if(!e)return;if(e.slot.startsWith('X.')){toast('Decorative inbox item');return;}e.read=true;S.currentEmailId=id;S.currentView='reader';render();}
+function renderReader(){
+  const e=S.emails.find(x=>x.id===S.currentEmailId);if(!e){S.currentView='inbox';return renderInbox()}
+  const who=e.recipient==='payer'?`${PERSON.payer_name} · ${PERSON.admin_name} copied`:(e.recipient==='cardholder'?(S.cardholderIsAdmin?'to me':`${PERSON.cardholder_name} · ${PERSON.admin_name} copied`):'to me');
+  return `<div class="mail-toolbar"><button class="iconbtn" onclick="goInbox()">←</button><button class="iconbtn">▣</button><button class="iconbtn">!</button><button class="iconbtn">⌫</button><button class="iconbtn">✉</button><button class="iconbtn">◷</button><div class="toolbar-spacer"></div><button class="iconbtn">▣</button><button class="iconbtn">↗</button></div><div class="reader"><div class="reader-head"><h1 class="reader-subject">${esc(e.subject)} <span class="inbox-label">Inbox ×</span></h1><div class="sender-line"><div class="sender-avatar">S</div><div class="sender-meta"><strong>Sonia Rahman</strong> <span class="sender-address">&lt;sonia@alaanpay.com&gt;</span><br><span class="sender-address">${who} ▾</span></div><div class="timestamp">Day ${e.day} · ${e.slot}</div><button class="iconbtn">☆</button><button class="iconbtn" onclick="toast('Reply')">↩</button><button class="iconbtn">⋮</button></div></div><div class="email-wrap">${renderEmailBody(e.slot)}</div><div class="gmail-replybar"><button class="replybtn" onclick="toast('Reply draft opened')">↩ Reply</button><button class="replybtn" onclick="toast('Forward draft opened')">↪ Forward</button></div></div>`;
+}
+function banner(){return `<div class="alaan-banner"><div><div class="eyebrow">Welcome onboard!</div><div class="headline">Your Alaan account is ready.</div></div><div class="card-art"><div class="c1"><span class="visa">VISA</span></div><div class="c2"><span class="visa">VISA</span></div></div><div class="logo">ALAAN</div></div>`}
+function footer(){return `<div class="footer-box"><div>Need Assistance? Visit <strong>alaan.com/help</strong></div><div class="footer-divider"></div><div>You received this email because your company signed up for an Alaan account and nominated you as an account administrator.</div><div style="margin-top:12px">If this was a mistake, please reply to this email. <span class="unsubscribe" onclick="unsubscribe(event)">Unsubscribe</span></div></div>`}
+function bodyWrap(inner,showBanner=false){return `${showBanner?banner():''}<div class="email-body">${inner}</div>${footer()}`}
+function btn(label,action,cls=''){return `<button class="cta ${cls}" onclick="openAction('${action}')">${label}</button>`}
+function renderEmailBody(slot){
+ const cardholder=S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name;
+ switch(slot){
+ case 'C0.0': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>Congratulations. ${PERSON.company_name}'s KYB has been approved and your Alaan account is ready.</p><p class="lead">Two ways to run company spending with Alaan:</p><div class="design-block product-grid"><div class="product-col"><div class="product-title">Super Card</div><ul><li>Issue company cards to your team in minutes</li><li>Set spend limits and category rules on every card</li><li>Track expenses in real time, not at month end</li><li>Smarter approvals, with receipts captured at the point of spend</li></ul></div><div class="product-col"><div class="product-title">Super Pay</div><ul><li>Pay vendors and contractors in 20+ countries, direct from Alaan</li><li>Zero transfer fees, with live FX rates</li><li>Same-day settlement</li><li>Invoices read, matched and routed for approval automatically</li></ul></div></div><p>Most companies start with Super Card. It takes a few minutes to set up and you'll see it working the same day.</p>${btn('Log in to Alaan','login-select')}<p>If you're not sure which fits, just reply to this email and I'll help you work it out.</p><p>Thanks,<br>Sonia</p>`,true);
+ case 'C0.1': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>It usually comes down to which of these sounds more like ${PERSON.company_name}.</p><div class="fork-grid"><div class="fork-card"><h4>Team spending is hard to see</h4><p>People pay out of pocket. Receipts come in over WhatsApp. You find out what was spent at the end of the month.<br><br>Super Card gives everyone who spends their own card with a limit you set, every transaction visible as it happens, and approvals built in.</p>${btn('Set up cards','select-card')}</div><div class="fork-card"><h4>Paying suppliers is slow and expensive</h4><p>Bank fees, poor exchange rates, transfers that take days, and invoices re-keyed by hand.<br><br>Super Pay sends payments to 20+ countries with zero transfer fees, live FX rates and same-day settlement.</p>${btn('Set up payments','select-pay','purple')}</div></div><p>If it's both, start with cards. It's quicker to set up.</p><p>Thanks,<br>Sonia</p>`);
+ case 'C0.3': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>If setting up Alaan feels like something to schedule for a quieter week, it isn't.</p><p class="lead">Three steps, one sitting:</p><div class="step-strip"><div class="step"><div class="step-num">1</div>Create your first company card</div><div class="step"><div class="step-num">2</div>Add funds to your wallet</div><div class="step"><div class="step-num">3</div>Make your first purchase</div></div><p>Most companies get through all three in one go. Once the card is active, you're ready for the next two steps.</p>${btn('Log in to Alaan','login-select')}<p>Thanks,<br>Sonia</p>`);
+ case 'C0.7': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name} was approved a week ago and the account hasn't been set up yet.</p><p>If it's easier to go through it together, book a time and we'll cover the whole thing: choosing between cards and payments, creating cards, setting limits and adding funds. It usually takes about twenty minutes.</p>${btn('Book a walkthrough','book')}<p>Or just reply and tell me what's in the way, and I'll help from there.</p><p>Thanks,<br>Sonia</p>`);
+ case 'C1.0': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name} is set up for Super Card. The next step is creating your first company card.</p><div class="open-marker">[OPEN: confirm virtual cards are usable immediately]</div><p>Make it virtual and it's ready to use straight away. You set the spending limit, choose where it works, and can change or freeze it whenever you want. It can be yours or anyone's on the team, and one card is enough to get the account going. Physical cards are available too, they take <strong>[OPEN: physical delivery time]</strong> to arrive.</p><p>Once available, your card details sit in Alaan under cards, ready to copy into any checkout.</p><p class="lead">Your setup checklist:</p><div class="checklist"><div class="checktile next"><span class="tinyflag">NEXT</span><div class="thumb">💳</div>Create your first card</div><div class="checktile"><div class="thumb">＋</div>Add funds to your wallet</div><div class="checktile"><div class="thumb">✓</div>Make your first purchase</div></div><div class="open-marker">[OPEN: confirm whether “assign company cards” survives as a separate fourth tile]</div>${btn('Create the first card','create-card')}<p>Thanks,<br>Sonia</p>`,true);
+ case 'C1.1': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>If the first card is waiting on you deciding who should get one, it doesn't need to be.</p><p>Create one, for yourself or for whoever spends most often. You can add people later, change limits any time, and freeze a card in one click. Nothing you set now is locked in.</p>${btn('Create the first card','create-card')}<p>Thanks,<br>Sonia</p>`);
+ case 'C1.3': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>Most of the work at month-end isn't the reporting. It's reconstructing what happened.</p><div class="open-marker">[OPEN: which rows to keep. The full asset runs three role sections, which is too long here. Proposed three rows:]</div><div class="design-block"><table class="compare"><thead><tr><th>Without Alaan</th><th>With Alaan</th></tr></thead><tbody><tr><td>4 to 6 hours a month on expense submission</td><td>Receipts shared instantly, at the point of spend</td></tr><tr><td>8 to 12 hours reconciling transactions manually</td><td>Receipts auto-matched to expenses</td></tr><tr><td>5 to 7 hours preparing expense reports</td><td>Live dashboards and export-ready reports</td></tr></tbody></table></div><p>Every card you issue has a limit you set, and every transaction arrives in Alaan as it happens with the receipt already attached. There's nothing to piece together at the end of the month, because it was never taken apart.</p>${btn('Create the first card','create-card')}<p>Thanks,<br>Sonia</p>`);
+ case 'C1.7': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name} is set up for Super Card but there's no card on the account yet.</p><p>If it's easier to go through it together, book a time and we'll cover the whole setup: creating cards, setting limits, adding funds and getting your team going. It usually takes about twenty minutes.</p>${btn('Book a walkthrough','book')}<p>Or reply and tell me what's holding it up.</p><p>Thanks,<br>Sonia</p>`);
+ case 'C2.0': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>The first company card for ${PERSON.company_name} is active. It needs funds on the account before it can be used.</p><p>Funding works by bank transfer from your company bank account. The details you need are in Alaan under your account section.</p><p class="lead">One thing to know before you look:</p><div class="callout"><strong>[COMPLIANCE-1]</strong><br>Approved wording explaining that the beneficiary name shown will be our banking partner rather than Alaan, and that this is expected. Do not invent regulatory language.</div><p>Add whatever you need to get started. There's no minimum, and you can top up any time.</p>${btn('View bank details','view-bank')}<p>If someone else at ${PERSON.company_name} makes the bank transfers, you can send them the details from Alaan without doing it yourself.</p><p>Thanks,<br>Sonia</p>`,true);
+ case 'C2.1': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>Here's the whole thing from start to finish.</p><div class="timeline"><div class="timeline-item"><div class="timeline-n">1</div><div><strong>Add the beneficiary.</strong> Add the account as a beneficiary in ${PERSON.company_name}'s online banking, using the details in Alaan. Some UAE banks take a few hours to approve a new beneficiary before you can send anything to it, so it's worth doing this part today even if you're transferring later in the week.</div></div><div class="timeline-item"><div class="timeline-n">2</div><div><strong>Send the transfer.</strong> Any amount. Most companies start small and top up once they're using the card.</div></div><div class="timeline-item"><div class="timeline-n">3</div><div><strong>We'll let you know.</strong> The balance updates in Alaan and we'll email you as soon as the funds are available <span class="open-marker" style="display:inline-block;margin:6px 0 0">[PAYMENTS-1: swap for “funds usually appear within a few hours” only if approved]</span>.</div></div></div>${btn('View bank details','view-bank')}<p>Thanks,<br>Sonia</p>`);
+ case 'C2.3': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>If you're not the person who makes transfers at ${PERSON.company_name}, this email is built to be forwarded. The PDF attached has everything your finance team needs and nothing else is required from you.</p><div class="attachment"><div class="pdf">PDF</div><div><strong>Meridian Trading · bank details.pdf</strong><br><span style="font-size:12px;color:#70758b">Includes the unresolved [COMPLIANCE-1] placeholder in this prototype.</span></div></div><p>There's also a better way to do it. Use Request Funds in Alaan: enter their email and the amount, and we'll send the details straight to them with you copied, then follow up with them directly so you don't have to chase.</p>${btn('Request funds','request-funds')}<p>Thanks,<br>Sonia</p>`);
+ case 'C2.3-RF': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>You sent the transfer details to ${PERSON.payer_name} a few days ago and nothing has reached ${PERSON.company_name}'s account yet.</p><p>Sending the request doesn't make the transfer, so it may be worth checking whether they've been able to action it. You can also send it yourself from the company bank account using the same details.</p>${btn('View bank details','view-bank')}<p>Thanks,<br>Sonia</p>`);
+ case 'C2.7': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name}'s card has been active for a week and there are no funds on the account yet.</p><p>Is it waiting on an internal approval, on your finance team's cycle, or is something about the transfer itself unclear? Reply and tell me which, and I'll help get round it.</p><p>If it's easier to talk it through, book a time and we'll sort it together.</p>${btn('Book a call','book')}<p>Thanks,<br>Sonia</p>`);
+ case 'C2.14': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name}'s account and first card are set up and waiting on funds.</p><p>If now is a better time, the bank details are in Alaan under your account section. Add whatever you need to get started.</p>${btn('View bank details','view-bank')}<p>And if you'd rather I stopped sending these, you can unsubscribe below and I will.</p><p>Thanks,<br>Sonia</p>`);
+ case 'RF.3': return bodyWrap(`<p>Hi,</p><p>${PERSON.admin_name} at ${PERSON.company_name} asked me to send you bank details for their Alaan account a few days ago, and the transfer hasn't come through yet.</p><p>The details and the PDF are in that earlier email. ${PERSON.admin_name} is copied here, so if this should go to someone else at ${PERSON.company_name}, just let them know.</p>${btn('View the details','view-bank')}<p>Thanks,<br>Sonia</p>`);
+ case 'FT.1': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>You marked a transfer as sent for ${PERSON.company_name} and it hasn't reached the account yet.</p><p>If you have the date and the amount, reply to this email and I'll check where it is.</p>${btn('Check your account','wallet')}<p>Thanks,<br>Sonia</p>`);
+ case 'C3.0': return bodyWrap(`<p>Hi ${cardholder},</p><p>Funds have landed in ${PERSON.company_name}'s Alaan account, so the company card in your name is ready to use.</p><p>Your full card details are in Alaan under cards, ready to copy into any checkout. The easiest first purchase is something the company already pays for, like a software subscription or an ad account.</p>${btn('Make the first purchase','purchase')}<p>Thanks,<br>Sonia</p>`,true);
+ case 'C3.1': return bodyWrap(`<p>Hi ${cardholder},</p><p>If you're waiting for a nod before using the card, you've got it.</p><p>${PERSON.admin_name} set the limit when the card was created, so anything within it is already approved. Every transaction shows up in Alaan as it happens, so there's nothing to report afterwards and no expense claim to file. Add the receipt from your phone and you're done.</p>${btn('Open Alaan','card-detail')}<p>Thanks,<br>Sonia</p>`);
+ case 'C3.3': return bodyWrap(`<p>Hi ${cardholder},</p><p>If you've tried using the card and it didn't go through, it's most often the account balance rather than anything wrong with the card.</p><p>Alaan cards spend from the company's balance, so a payment larger than what's on the account will be declined even if the card limit is higher. ${PERSON.admin_name} can top up in a couple of minutes and you can try again straight away.</p>${btn('Add funds','wallet')}<p>Thanks,<br>Sonia</p>`);
+ case 'C3.7': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name}'s account is funded and the first card is active, but there hasn't been a purchase on it yet.</p><p>Is the card with the right person, or is something about using it unclear? Reply and tell me which.</p><p>If it's easier to talk it through, book a time and we'll sort it together.</p>${btn('Book a call','book')}<p>Thanks,<br>Sonia</p>`);
+ case 'IM.0': return bodyWrap(`<div class="open-marker">[OPEN: sender not decided. Prototype renders the Sonia version.]</div><p>Hi ${PERSON.first_name},</p><p>${PERSON.im_first_name} will be looking after ${PERSON.company_name}'s setup from here. They'll help you get the first card created, the account funded and your team using it.</p>${btn(`Book a time with ${PERSON.im_first_name}`,'book-im')}<p>You can reply to this email and it'll reach them directly. I'll pause the automatic setup emails while you're working together.</p><p>Thanks,<br>Sonia</p>`);
+ }
+}
+
+function openAction(target){
+  S.appTarget=target;S.currentView='alaan';render();
+}
+function renderAlaan(){
+  const t=S.appTarget;
+  if(!S.loggedIn && t!=='book' && t!=='book-im') return alaanShell(renderLogin(t));
+  if(t==='login-select'||t==='select-card'||t==='select-pay') return alaanShell(renderProductSelect(t));
+  if(t==='create-card') return alaanShell(renderCardCreate());
+  if(t==='view-bank'||t==='request-funds') return alaanShell(renderBankDetails(t==='request-funds'));
+  if(t==='wallet') return alaanShell(renderWallet());
+  if(t==='purchase'||t==='card-detail') return alaanShell(renderCardDetail(t==='purchase'));
+  if(t==='book'||t==='book-im') return alaanShell(renderBooking(t==='book-im'));
+  return alaanShell(`<div class="product-shell"><div class="app-card"><h2>Prototype destination</h2><p>This action is not mapped.</p></div></div>`);
+}
+function alaanShell(inner){return `<div class="alaan-shell"><div class="alaan-top"><div class="alaan-wordmark">ALAAN</div><div style="color:#afb5d7;font-size:12px">Meridian Trading</div><button class="alaan-back" onclick="goInbox()">← Back to Gmail</button></div><div class="alaan-content">${inner}</div></div>`}
+function renderLogin(next){return `<div class="product-shell" style="max-width:480px"><h1>Log in to Alaan</h1><div class="sub">Continue as Rana Haddad to preview this lifecycle.</div><div class="app-card"><div class="field"><label>Work email</label><input value="rana@meridiantrading.ae" disabled></div><div style="height:14px"></div><button class="big-action" onclick="completeLogin('${next}')">Log in</button><button class="outline-action" style="margin-left:8px" onclick="goInbox()">Cancel</button></div></div>`}
+function completeLogin(next){S.loggedIn=true;logAction('Logged in to Alaan');S.appTarget=next;render()}
+function renderProductSelect(target){return `<div class="product-shell"><h1>What would you like to set up?</h1><div class="sub">Choose a starting point for ${PERSON.company_name}.</div><div class="product-select"><div class="product-choice"><div class="choice-icon">💳</div><h3>Super Card</h3><p>Issue company cards, set limits and category rules, and see expenses in real time.</p><button class="big-action" onclick="chooseProduct('card')">Set up cards</button></div><div class="product-choice"><div class="choice-icon">↗</div><h3>Super Pay</h3><p>Pay vendors and contractors in 20+ countries with live FX rates and zero transfer fees.</p><button class="big-action" onclick="chooseProduct('pay')">Set up payments</button></div></div><div style="margin-top:18px"><button class="outline-action" onclick="goInbox()">Cancel</button></div></div>`}
+function chooseProduct(p){const prev=deriveStage();S.productSelected=p;logAction(`Product selected: ${p==='card'?'Super Card':'Super Pay'}`);updateStageAfterAction(prev);S.currentView='inbox';S.appTarget=null;toast(p==='card'?'Super Card selected. C1 starts tomorrow.':'Super Pay selected. Lifecycle handed off.');render()}
+function renderCardCreate(){return `<div class="product-shell"><h1>Create your first company card</h1><div class="sub">One card is enough to start. You can add more later.</div><div class="app-card"><div class="formrow"><div class="field"><label>Cardholder</label><input id="cardName" value="${S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name}"></div><div class="field"><label>Monthly limit (AED)</label><input id="cardLimit" type="number" value="2000"></div></div><div class="formrow"><div class="field"><label>Card type</label><select id="cardType"><option value="virtual">Virtual</option><option value="physical">Physical</option></select></div><div class="field"><label>Spend category</label><select><option>All business spend</option><option>Software</option><option>Travel</option></select></div></div><div class="notice warn">The copy about immediate virtual-card usability and physical delivery time is still marked OPEN in the email spec. The prototype uses 1 simulated day for virtual activation and 3 for physical only to demonstrate the lifecycle transition.</div><button class="big-action" onclick="createCard()">Create card</button> <button class="outline-action" onclick="goInbox()">Cancel</button></div></div>`}
+function createCard(){const type=document.getElementById('cardType').value;const prev=deriveStage();S.cardCreated=true;S.cardActivationDueDay=S.day+(type==='virtual'?1:3);logAction(`First ${type} company card created; activation scheduled day ${S.cardActivationDueDay}`);updateStageAfterAction(prev);S.currentView='inbox';toast(`Card created. It activates on simulated day ${S.cardActivationDueDay}.`);render()}
+function renderBankDetails(openRequest=false){return `<div class="product-shell"><h1>Bank details</h1><div class="sub">Use these details from your company bank account.</div><div class="bank-card"><div class="app-card"><div class="callout"><strong>[COMPLIANCE-1]</strong><br>Approved beneficiary-name explanation is unresolved. This prototype keeps the placeholder visible.</div><div class="bank-details"><div class="bank-line"><span class="lab">Beneficiary</span><span class="val">NYMCARD PAYMENT SERVICES L.L.C</span></div><div class="bank-line"><span class="lab">Bank</span><span class="val">Mashreq Bank</span></div><div class="bank-line"><span class="lab">IBAN</span><span class="val">AE•• •••• •••• •••• 4821</span></div><div class="bank-line"><span class="lab">Currency</span><span class="val">AED</span></div></div></div><div class="app-card"><h3 style="margin-top:0;color:#151b44">Someone else makes transfers?</h3><p style="color:#68708a;line-height:1.5">Request funds and Alaan will send the details to them with you copied.</p><div class="field"><label>Payer email</label><input id="payerEmail" value="ahmed@meridiantrading.ae"></div><div style="height:10px"></div><div class="field"><label>Amount (optional)</label><input id="requestAmount" type="number" value="1000"></div><div style="height:14px"></div><button class="big-action" onclick="sendRequestFunds()">Request funds</button></div></div><div><button class="outline-action" onclick="goInbox()">Back to inbox</button> <button class="outline-action" onclick="S.appTarget='wallet';render()">Demo: add funds now</button></div></div>`}
+function sendRequestFunds(){if(!S.requestFundsSent){S.requestFundsSent=true;S.requestFundsDay=S.day;logAction(`Request Funds sent to ${PERSON.payer_name}`);}toast('Funding request sent. C2 continues and RF.3 is scheduled for +3 days.');goInbox()}
+function renderWallet(){return `<div class="product-shell"><h1>Primary wallet</h1><div class="sub">Meridian Trading · AED wallet</div><div class="app-card"><div style="color:#747b91;font-size:12px">Available balance</div><div class="wallet-balance">AED ${Number(S.balance).toLocaleString()}</div><div class="formrow" style="grid-template-columns:1fr auto;align-items:end"><div class="field"><label>Add funds (AED)</label><input id="fundAmount" type="number" value="${S.balance<500?300:1000}" min="1"></div><button class="big-action" onclick="addFunds()">Add funds</button></div><div class="notice">For demo purposes, adding funds lands instantly and moves the lifecycle to C3 on the next simulated day.</div></div><button class="outline-action" onclick="goInbox()">Cancel</button></div>`}
+function addFunds(){const amt=Math.max(1,Number(document.getElementById('fundAmount').value||0));const prev=deriveStage();S.balance+=amt;S.funded=true;logAction(`Fund-in recorded: AED ${amt}`);updateStageAfterAction(prev);S.currentView='inbox';toast(`AED ${amt} added. First-purchase stage starts tomorrow.`);render()}
+function renderCardDetail(showPurchase){return `<div class="product-shell"><h1>Company card</h1><div class="sub">${S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name} · Virtual card</div><div class="app-card" style="display:grid;grid-template-columns:380px 1fr;gap:28px"><div class="card-preview"><div class="brand">ALAAN</div><div class="number">•••• •••• •••• 3433</div><div class="name">${S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name}</div><div class="visa2">VISA</div></div><div><h3 style="margin-top:0;color:#151b44">Make a purchase</h3><div class="field"><label>Merchant</label><input id="merchant" value="Figma"></div><div style="height:10px"></div><div class="field"><label>Amount (AED)</label><input id="purchaseAmount" type="number" value="500"></div><div style="height:14px"></div><button class="big-action" onclick="makePurchase()">Make purchase</button><div style="margin-top:12px;color:#6e758a;font-size:12px">Wallet balance: AED ${Number(S.balance).toLocaleString()}</div></div></div><button class="outline-action" onclick="goInbox()">Back to inbox</button></div>`}
+function makePurchase(){const amt=Number(document.getElementById('purchaseAmount').value||0);if(amt>S.balance){logAction(`Purchase declined: AED ${amt} > balance AED ${S.balance}`);toast('Payment declined — the wallet balance is too low. C3 continues.');return;}const prev=deriveStage();S.balance-=amt;S.purchased=true;logAction(`First successful purchase: AED ${amt}`);updateStageAfterAction(prev);S.currentView='inbox';toast('Purchase approved. Lifecycle complete.');render()}
+function renderBooking(im){return `<div class="product-shell" style="max-width:700px"><h1>${im?`Book time with ${PERSON.im_first_name}`:'Book a walkthrough'}</h1><div class="sub">Choose any demo slot. Booking pauses automated stage emails.</div><div class="app-card"><div style="font-weight:700;color:#151b44">Tomorrow</div><div class="booking-slots"><button class="slotbtn" onclick="bookCall('10:00 AM')">10:00 AM</button><button class="slotbtn" onclick="bookCall('1:30 PM')">1:30 PM</button><button class="slotbtn" onclick="bookCall('4:00 PM')">4:00 PM</button></div><button class="outline-action" onclick="goInbox()">Cancel</button></div></div>`}
+function bookCall(time){if(!S.imAssigned){S.imAssigned=true;logAction(`Walkthrough booked for ${time}`);deliver('IM.0',{extra:true});}S.currentView='inbox';toast('Booked. Automated stage emails are paused and IM.0 was sent.');render()}
+function markTransferSent(){if(!S.cardActivated||S.funded){toast('FT.1 is only meaningful after card activation and before funding.');return;}S.transferMarkedSent=true;S.transferSentDay=S.day;logAction('Optional demo event: transfer marked sent');toast('Transfer marked sent. FT.1 will be due in 1 simulated day if funds have not landed.');updateSimulator()}
+
+function unsubscribe(ev){ev&&ev.stopPropagation();S.unsubscribed=true;logAction('Unsubscribed from automated setup emails');toast('Unsubscribed. No further automated stage emails will be sent.');updateSimulator()}
+function goInbox(){S.currentView='inbox';S.currentEmailId=null;S.appTarget=null;render()}
+function togglePersona(){S.cardholderIsAdmin=!S.cardholderIsAdmin;logAction(`Cardholder persona: ${S.cardholderIsAdmin?'Admin is cardholder':'Separate cardholder'}`);render()}
+function toggleSim(){document.getElementById('simPanel').classList.toggle('hidden')}
+function updateSimulator(){
+  document.getElementById('simDay').textContent=S.day;document.getElementById('simStage').textContent=stageLabel();
+  const toggle=document.getElementById('personaToggle');toggle&&toggle.classList.toggle('on',S.cardholderIsAdmin);
+  const flags=[['Product',S.productSelected||'none'],['Card',S.cardCreated?'created':'none'],['Active',S.cardActivated?'yes':'no'],['Funded',S.funded?`AED ${S.balance}`:'no'],['Purchase',S.purchased?'yes':'no'],['Request Funds',S.requestFundsSent?'sent':'no'],['IM',S.imAssigned?'assigned':'no']];
+  const el=document.getElementById('flags');if(el)el.innerHTML=flags.map(([k,v])=>`<span class="flag ${['none','no'].includes(String(v))?'':'on'}">${k}: ${v}</span>`).join('');
+  const note=document.getElementById('journeyNote');if(note){let txt='';const st=deriveStage();const age=S.day-S.stageStartDay;if(st==='C0')txt=`C0 day ${age}: choose a product or advance time to see follow-ups.`;if(st==='C1')txt=`C1 day ${age}: create the first company card.`;if(st==='ACT')txt=`Waiting for card activation on day ${S.cardActivationDueDay}.`;if(st==='C2')txt=`C2 day ${age}: funding is the active bottleneck.`;if(st==='C3')txt=`C3 day ${age}: make the first successful purchase.`;if(st==='PAY')txt='Super Pay was selected. Card lifecycle has exited.';if(st==='IM')txt='IM assigned. Automated stage emails are paused.';if(st==='EXIT')txt='Journey complete after the first successful purchase.';if(st==='HUMAN')txt='Automation ended; this corporate is now in a human review queue.';if(st==='STOP')txt='Recipient unsubscribed from automated emails.';note.textContent=txt;}
+  const count=document.getElementById('inboxCount');if(count)count.textContent=S.emails.filter(e=>!e.read).length;
+}
+function showSummary(){
+  const lifecycle=S.emails.filter(e=>!e.slot.startsWith('X.')).sort((a,b)=>a.day-b.day||a.seq-b.seq);
+  const rows=lifecycle.map(e=>`<tr><td>Day ${e.day}</td><td>${e.slot}</td><td>${esc(e.subject)}</td><td>${e.recipientName}</td><td><span class="statuspill ${e.read?'green':''}">${e.read?'Opened':'Unopened'}</span></td></tr>`).join('');
+  showModal('Journey summary',`<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px"><div><table class="summary-table"><thead><tr><th>Day</th><th>Slot</th><th>Email</th><th>Recipient</th><th>Status</th></tr></thead><tbody>${rows||'<tr><td colspan="5">No lifecycle emails sent.</td></tr>'}</tbody></table></div><div><h3 style="margin-top:0;color:#151a42">Actions</h3>${S.actions.map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee;font-size:12px"><strong>Day ${a.day}</strong><br>${esc(a.label)}</div>`).join('')}</div></div>`)
+}
+function showState(){showModal('Current lifecycle state',`<div class="state-json">${esc(JSON.stringify({...S,emails:undefined,actions:undefined},null,2))}</div>`)}
+function showAllTemplates(){const order=['C0.0','C0.1','C0.3','C0.7','C1.0','C1.1','C1.3','C1.7','C2.0','C2.1','C2.3','C2.3-RF','C2.7','C2.14','RF.3','FT.1','C3.0','C3.1','C3.3','C3.7','IM.0'];showModal('Lifecycle email map',`<table class="summary-table"><thead><tr><th>Slot</th><th>Subject</th><th>Primary recipient</th></tr></thead><tbody>${order.map(k=>`<tr><td>${k}</td><td>${esc(templates[k].subject)}</td><td>${templates[k].recipient}</td></tr>`).join('')}</tbody></table>`)}
+function showModal(title,body){document.getElementById('modalRoot').innerHTML=`<div class="modalback" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalhead"><h2>${esc(title)}</h2><button onclick="closeModal()">×</button></div><div class="modalbody">${body}</div></div></div>`}
+function closeModal(){document.getElementById('modalRoot').innerHTML=''}
+function toast(msg){const root=document.getElementById('toastRoot');root.innerHTML=`<div class="toast">${esc(msg)}</div>`;setTimeout(()=>{if(root.innerHTML)root.innerHTML=''},2200)}
+function resetPrototype(){if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null}advanceQueue=0;S=initialState();seed();render();toast('Journey reset to day 0')}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+seed();render();
+</script>
+
+<style id="reviewPatchStyles">
+  body{overflow:auto}
+  .workspace{display:flex;gap:12px;align-items:stretch}
+  .surface{flex:1;min-width:0}
+  .sim-panel{position:relative;right:auto;top:auto;flex:0 0 320px;width:320px;z-index:20;align-self:stretch;max-height:100%;overflow:auto;margin:0;border-radius:16px}
+  .sim-panel.hidden{display:none!important}
+  .lifecycle-chip{border:1px solid #dadce0;background:#fff;border-radius:20px;padding:9px 12px;color:#3c4043;font-weight:600;font-size:12px;display:flex;align-items:center;gap:7px}
+  .lifecycle-chip:hover{background:#f6f8fc}
+  .persona-card{padding:10px;border-radius:10px;background:#1b2148;margin-bottom:9px}
+  .persona-card label,.scenario-box label{display:block;color:#9fa7d0;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+  .persona-card select,.scenario-box select{width:100%;border:1px solid #424a74;border-radius:8px;background:#12183a;color:#fff;padding:8px;font-size:11px;outline:none}
+  .persona-hint{font-size:10px;color:#bec4e7;line-height:1.4;margin-top:7px}
+  .next-card{border:1px solid #343c67;background:#171e46;border-radius:11px;padding:11px;margin:9px 0}
+  .next-card .k{font-size:9px;color:#9fa7d0;text-transform:uppercase;letter-spacing:.08em}
+  .next-card .date{font-size:12px;font-weight:700;margin-top:5px;color:#fff}
+  .next-card .subject{font-size:11px;line-height:1.35;color:#dbe0ff;margin-top:4px}
+  .next-card .to{font-size:9px;color:#9fa7d0;margin-top:5px}
+  .sim-actions.review{grid-template-columns:1fr 1fr 1fr}
+  .sim-actions.review .next-primary{grid-column:1/-1;padding:11px 10px;font-size:12px}
+  .simbtn:disabled{opacity:.45;cursor:not-allowed}
+  .scenario-box{padding:10px 0;border-top:1px solid #282f57}
+  .scenario-run{display:flex;gap:6px;margin-top:7px}
+  .scenario-run select{flex:1}
+  .scenario-run .simbtn{flex:0 0 auto}
+  .prototype-note{margin:14px 0 0;padding:10px 12px;border:1px dashed #bbc0cc;border-radius:8px;background:#f8f9fb;color:#666d7d;font-size:11px;line-height:1.45}
+  .prototype-note strong{color:#343a4e}
+  .provisional{color:#8a8ea1;text-decoration:underline dotted;text-underline-offset:3px}
+  .mail-row[role="button"]{cursor:pointer}
+  .mail-row[role="button"]:focus-visible{outline:2px solid #6c4fd3;outline-offset:-2px;background:#f3f0ff}
+  .navitem[role="button"]{cursor:pointer}
+  .navitem[role="button"]:focus-visible{outline:2px solid #6c4fd3;outline-offset:-2px}
+  .terminal-summary{padding:11px 16px;border-bottom:1px solid #e1e5ee;background:#f6f4ff;color:#3f3569;display:flex;align-items:center;gap:10px}
+  .terminal-summary button{margin-left:auto;border:0;background:#11163e;color:#fff;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700}
+  .persona-badge{display:inline-flex;align-items:center;padding:3px 7px;border-radius:10px;background:#f0edff;color:#6043c0;font-size:10px;font-weight:700;margin-left:6px}
+  .standalone-shell{height:100%;overflow:auto;background:#f6f8fc;padding:34px}
+  .standalone-card{max-width:720px;margin:0 auto;background:#fff;border:1px solid #e1e4ec;border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+  .standalone-head{background:#0b103b;color:#fff;padding:20px 24px;display:flex;align-items:center;gap:12px}
+  .standalone-head .brand{font-weight:800;letter-spacing:3px}
+  .standalone-head button{margin-left:auto;border:1px solid #4b5279;background:transparent;color:#fff;border-radius:8px;padding:8px 10px}
+  .standalone-body{padding:26px}
+  .role-tag{display:inline-flex;padding:4px 8px;border-radius:12px;background:#ece8ff;color:#6043c0;font-size:10px;font-weight:700}
+  .unread-btn{border:0;background:transparent;color:#5f6368;font-size:17px;width:38px;height:38px;border-radius:50%}
+  .unread-btn:hover{background:#f1f3f4}
+  @media (max-width:1180px){.sim-panel{flex-basis:286px;width:286px}}
+  @media (max-width:920px){
+    .app{height:auto;min-height:100vh}.gmail-main{min-height:calc(100vh - 64px)}
+    .workspace{flex-direction:column;overflow:visible;padding:8px 12px 12px}
+    .sim-panel{order:-1;flex:none;width:100%;max-height:none;align-self:auto}
+    .surface{height:720px;min-height:720px;flex:none}
+    .leftbar{display:none}
+  }
+  @media (max-width:640px){
+    .gmail-brand{min-width:auto}.gmail-brand span{display:none}.active-chip{display:none}.search{min-width:0}
+    .surface{height:760px;min-height:760px}.reader-head{padding-left:24px;padding-right:24px}.email-wrap{padding:0 14px}
+    .step-strip,.checklist{grid-template-columns:1fr}.step+.step{border-left:0;border-top:1px solid #e4e6f0}.product-grid,.fork-grid{grid-template-columns:1fr}
+    .product-col+.product-col{border-left:0;border-top:1px solid #e7e9f2}.standalone-shell{padding:14px}.standalone-body{padding:18px}
+  }
+</style>
+
+
+<script id="reviewPatchScript">
+/* Review patch: scheduling deferral, persona inboxes, faster time controls, scenarios, and copy fixes. */
+const REVIEW_BASE_DATE = new Date(2026, 8, 15, 9, 0, 0);
+const _baseEmailBody = renderEmailBody;
+let CURRENT_RENDER_SLOT = null;
+let reviewAdvanceMode = 'days';
+let nextEmailTimer = null;
+
+templates['RF.0'] = {subject:'Rana Haddad sent transfer details',preview:'Bank details for Meridian Trading.',banner:false,recipient:'payer',cta:'payer-details'};
+templates['C1.3'].subject = 'What month-end looks like on Alaan';
+templates['C1.7'].subject = 'Twenty minutes to get your first card out';
+templates['C1.7'].preview = 'Create the card, set limits and get started.';
+templates['RF.3'].cta = 'payer-details';
+templates['C3.3'].cta = 'notify-admin';
+
+function ensureReviewState(){
+  if(!Array.isArray(S.pendingEmails)) S.pendingEmails=[];
+  if(!S.viewerPersona) S.viewerPersona='admin';
+  if(typeof S.summaryShown!=='boolean') S.summaryShown=false;
+  if(typeof S.cardholderIsAdmin!=='boolean') S.cardholderIsAdmin=false;
+}
+function simDate(day){const d=new Date(REVIEW_BASE_DATE);d.setDate(d.getDate()+day);return d;}
+function shortDate(day){return simDate(day).toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+function longDate(day){return simDate(day).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+function viewerName(){ensureReviewState();return S.viewerPersona==='cardholder'?(S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name):(S.viewerPersona==='payer'?PERSON.payer_name:PERSON.admin_name);}
+function viewerRole(){return S.viewerPersona==='cardholder'?'Cardholder':(S.viewerPersona==='payer'?'Payer / funder':'Admin');}
+function recipientKey(rec){return rec==='cardholder'&&S.cardholderIsAdmin?'admin':rec;}
+function recipientName(rec){return rec==='payer'?PERSON.payer_name:(rec==='cardholder'?(S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name):PERSON.admin_name);}
+function isAdminUnsubscribed(rec){return rec==='admin' && !!S.unsubscribed;}
+function sentTodayFor(recipient){const key=recipientKey(recipient);return S.emails.some(e=>e.day===S.day && recipientKey(e.recipient)===key);}
+function isVisibleToViewer(e){
+  if(e.slot.startsWith('X.')) return true;
+  ensureReviewState();
+  if(S.viewerPersona==='admin') return e.recipient==='admin'||e.ccAdmin===true||recipientKey(e.recipient)==='admin';
+  if(S.viewerPersona==='cardholder') return e.recipient==='cardholder';
+  if(S.viewerPersona==='payer') return e.recipient==='payer';
+  return true;
+}
+function setViewerPersona(v){
+  ensureReviewState();S.viewerPersona=v;
+  if(S.currentView==='reader'){
+    const e=S.emails.find(x=>x.id===S.currentEmailId);
+    if(e&&!isVisibleToViewer(e)){S.currentView='inbox';S.currentEmailId=null;}
+  }
+  logAction(`Inbox persona switched to ${viewerRole()}`);render();
+}
+
+function deriveStage(){
+  if(S.imAssigned) return 'IM';
+  if(S.humanReview) return 'HUMAN';
+  if(!S.productSelected) return 'C0';
+  if(S.productSelected==='pay') return 'PAY';
+  if(!S.cardCreated) return 'C1';
+  if(!S.cardActivated) return 'ACT';
+  if(!S.funded) return 'C2';
+  if(!S.purchased) return 'C3';
+  return 'EXIT';
+}
+function stageLabel(){const x=deriveStage();return ({C0:'C0 · Choose product',C1:'C1 · Create card',ACT:'Activation window',C2:'C2 · Add funds',C3:'C3 · First purchase',PAY:'Super Pay handoff',IM:'IM handoff',EXIT:'Exited',HUMAN:'Human review'})[x]||x;}
+function emailPending(slot){ensureReviewState();return S.pendingEmails.some(p=>p.slot===slot);}
+function queuePending(slot,{kind='stage',stage=null,dueDay=S.day,extra=false}={}){
+  ensureReviewState();
+  if(emailExists(slot)||emailPending(slot)||!templates[slot]) return;
+  const rec=templates[slot].recipient;
+  if(isAdminUnsubscribed(rec)){logAction(`Email ${slot} suppressed for Admin after unsubscribe`);return;}
+  S.pendingEmails.push({slot,kind,stage,dueDay,extra,queuedDay:S.day,order:S.pendingEmails.length});
+  if(dueDay<S.day||sentTodayFor(rec)) logAction(`Email ${slot} deferred by the 24-hour recipient cap`);
+}
+function cancelPending(predicate,label){
+  ensureReviewState();const before=S.pendingEmails.length;S.pendingEmails=S.pendingEmails.filter(p=>!predicate(p));
+  if(before!==S.pendingEmails.length && label) logAction(label);
+}
+function deliver(slot,{extra=false,exemptCap=false}={}){
+  ensureReviewState();
+  if(emailExists(slot)) return false;
+  const t=templates[slot];if(!t)return false;
+  if(isAdminUnsubscribed(t.recipient)) return false;
+  if(!exemptCap && sentTodayFor(t.recipient)) return false;
+  S.seq++;
+  const rec=t.recipient;
+  const rname=recipientName(rec);
+  S.emails.push({id:'m'+S.seq,slot,day:S.day,subject:merge(t.subject),preview:merge(t.preview),banner:t.banner,recipient:rec,recipientName:rname,ccAdmin:rec==='payer'||rec==='cardholder',read:false,newmail:true,seq:S.seq,extra});
+  logAction(`Email ${slot} sent to ${rname}${rec==='payer'||rec==='cardholder'?' (Admin copied)':''}`);
+  setTimeout(()=>{const e=S.emails.find(x=>x.slot===slot);if(e)e.newmail=false;},1600);
+  return true;
+}
+function flushPendingEmails(){
+  ensureReviewState();
+  S.pendingEmails.sort((a,b)=>a.dueDay-b.dueDay||a.queuedDay-b.queuedDay||a.order-b.order);
+  const keep=[];
+  for(const p of S.pendingEmails){
+    if(emailExists(p.slot)) continue;
+    const rec=templates[p.slot]?.recipient;
+    if(!rec) continue;
+    if(isAdminUnsubscribed(rec)) continue;
+    if(p.dueDay>S.day || sentTodayFor(rec)){keep.push(p);continue;}
+    if(!deliver(p.slot,{extra:p.extra})) keep.push(p);
+  }
+  S.pendingEmails=keep;
+}
+function stageSlots(st){
+  if(st==='C0') return [{age:0,slot:'C0.0'},{age:1,slot:'C0.1'},{age:3,slot:'C0.3'},{age:7,slot:'C0.7'}];
+  if(st==='C1') return [{age:0,slot:'C1.0'},{age:1,slot:'C1.1'},{age:3,slot:'C1.3'},{age:7,slot:'C1.7'}];
+  if(st==='C2') return [{age:0,slot:'C2.0'},{age:1,slot:'C2.1'},{age:3,slot:S.requestFundsSent?'C2.3-RF':'C2.3'},{age:7,slot:'C2.7'},{age:14,slot:'C2.14'}];
+  if(st==='C3') return [{age:0,slot:'C3.0'},{age:1,slot:'C3.1'},{age:3,slot:'C3.3'},{age:7,slot:'C3.7'}];
+  return [];
+}
+function maybeDeliverStageEmail(){
+  ensureReviewState();
+  const st=deriveStage();
+  if(st==='PAY'){if(!S.payHandoffShown){S.payHandoffShown=true;logAction('Super Pay selected — lifecycle handed off');}return;}
+  if(['ACT','EXIT','IM','HUMAN'].includes(st)) return;
+  const age=S.day-S.stageStartDay;
+  for(const item of stageSlots(st)){
+    if(st==='C2'&&item.age===3&&(emailExists('C2.3')||emailExists('C2.3-RF')||emailPending('C2.3')||emailPending('C2.3-RF'))) continue;
+    if(age>=item.age && !emailExists(item.slot) && !emailPending(item.slot)) queuePending(item.slot,{kind:'stage',stage:st,dueDay:S.stageStartDay+item.age});
+  }
+}
+function processExtraEmails(){
+  ensureReviewState();
+  if(S.imAssigned) return;
+  if(S.funded){cancelPending(p=>p.slot==='RF.3'||p.slot==='FT.1');return;}
+  if(S.requestFundsSent && S.requestFundsDay!==null && S.day>=S.requestFundsDay+3 && !emailExists('RF.3') && !emailPending('RF.3')){
+    queuePending('RF.3',{kind:'extra',dueDay:S.requestFundsDay+3,extra:true});
+  }
+  if(S.transferMarkedSent && S.transferSentDay!==null && S.day>=S.transferSentDay+1 && !emailExists('FT.1') && !emailPending('FT.1') && !S.unsubscribed){
+    queuePending('FT.1',{kind:'extra',dueDay:S.transferSentDay+1,extra:true});
+  }
+}
+function processDay(renderUI=true){
+  ensureReviewState();
+  if(S.cardCreated&&!S.cardActivated&&S.cardActivationDueDay!==null&&S.day>=S.cardActivationDueDay){
+    S.cardActivated=true;S.stageStartDay=S.day;logAction('First company card activated');
+  }
+  if(deriveStage()==='C2' && !S.funded && S.day-S.stageStartDay>=21){
+    S.humanReview=true;cancelPending(p=>p.kind==='stage'&&p.stage==='C2','Unsent C2 emails cancelled on human-review exit');
+    logAction('No fund-in by day 21 of C2 — moved to human review queue');
+  }else{
+    maybeDeliverStageEmail();processExtraEmails();flushPendingEmails();
+  }
+  S.currentView='inbox';S.currentEmailId=null;
+  if(renderUI)render();
+}
+function updateStageAfterAction(previousStage){
+  ensureReviewState();const next=deriveStage();
+  if(next!==previousStage){
+    cancelPending(p=>p.kind==='stage'&&p.stage===previousStage,`Unsent ${previousStage} emails cancelled after stage exit`);
+    if(['C0','C1','C2','C3'].includes(next)) S.stageStartDay=S.day;
+    if(S.funded) cancelPending(p=>p.slot==='RF.3'||p.slot==='FT.1','Pending funding follow-ups cancelled after fund-in');
+    logAction(`Stage changed: ${previousStage} → ${next}`);
+    maybeDeliverStageEmail();processExtraEmails();flushPendingEmails();
+  }
+}
+
+function queueAdvance(n){
+  if(advanceQueue>0||nextEmailTimer)return;
+  reviewAdvanceMode='days';advanceQueue=n;advanceOne();
+}
+function advanceOne(){
+  if(advanceQueue<=0){document.getElementById('advanceOverlay')?.classList.add('hidden');return;}
+  const ov=document.getElementById('advanceOverlay'),bar=document.getElementById('advanceProgress');
+  ov.classList.remove('hidden');document.getElementById('advanceText').textContent=`Advancing to ${longDate(S.day+1)}…`;
+  bar.style.transition='none';bar.style.width='0%';requestAnimationFrame(()=>requestAnimationFrame(()=>{bar.style.transition='width .85s linear';bar.style.width='100%';}));
+  advanceTimer=setTimeout(()=>finishAdvance(),900);
+}
+function finishAdvance(){
+  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null;}
+  if(advanceQueue<=0)return;
+  S.day++;advanceQueue--;processDay(false);render();
+  if(advanceQueue>0)setTimeout(advanceOne,70);else document.getElementById('advanceOverlay')?.classList.add('hidden');
+}
+function skipAdvance(){
+  if(nextEmailTimer){clearTimeout(nextEmailTimer);nextEmailTimer=null;completeNextScheduledAdvance(true);return;}
+  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null;}
+  while(advanceQueue>0){S.day++;advanceQueue--;processDay(false);}
+  document.getElementById('advanceOverlay')?.classList.add('hidden');render();toast('Skipped to the end of the selected time jump.');
+}
+function getNextScheduledItem(){
+  ensureReviewState();const candidates=[];
+  const add=(day,slot,type='email')=>{if(day<S.day)day=S.day;const rec=slot&&templates[slot]?templates[slot].recipient:null;if(type==='email'&&rec&&isAdminUnsubscribed(rec))return;candidates.push({day,slot,type,recipient:rec});};
+  for(const p of S.pendingEmails){let d=Math.max(S.day,p.dueDay);if(sentTodayFor(templates[p.slot].recipient))d=Math.max(d,S.day+1);add(d,p.slot);}
+  const st=deriveStage();
+  if(['C0','C1','C2','C3'].includes(st)){
+    for(const item of stageSlots(st)){
+      if(st==='C2'&&item.age===3&&(emailExists('C2.3')||emailExists('C2.3-RF')||emailPending('C2.3')||emailPending('C2.3-RF')))continue;
+      if(emailExists(item.slot)||emailPending(item.slot))continue;
+      let d=S.stageStartDay+item.age;if(d<S.day)d=S.day;if(sentTodayFor(templates[item.slot].recipient)&&d===S.day)d++;
+      if(st==='C2'&&d>=S.stageStartDay+21)continue;add(d,item.slot);
+    }
+  }
+  if(st==='ACT'&&S.cardActivationDueDay!==null){let d=S.cardActivationDueDay;if(sentTodayFor('admin')&&d===S.day)d++;add(d,'C2.0');}
+  if(!S.funded&&S.requestFundsSent&&S.requestFundsDay!==null&&!emailExists('RF.3')&&!emailPending('RF.3')) add(S.requestFundsDay+3,'RF.3');
+  if(!S.funded&&S.transferMarkedSent&&S.transferSentDay!==null&&!emailExists('FT.1')&&!emailPending('FT.1')&&!S.unsubscribed) add(S.transferSentDay+1,'FT.1');
+  if(st==='C2'&&!S.funded) candidates.push({day:S.stageStartDay+21,slot:null,type:'human-review',recipient:null});
+  candidates.sort((a,b)=>a.day-b.day||(a.type==='email'?-1:1));
+  return candidates[0]||null;
+}
+function advanceToNextEmail(){
+  if(advanceQueue>0||nextEmailTimer)return;
+  const forecast=getNextScheduledItem();
+  if(!forecast){toast('No further automated email is scheduled in the current state.');return;}
+  reviewAdvanceMode='next';
+  const ov=document.getElementById('advanceOverlay'),bar=document.getElementById('advanceProgress');
+  ov.classList.remove('hidden');
+  document.getElementById('advanceText').textContent=forecast.type==='email'?`Next email: ${longDate(forecast.day)}`:`Next event: ${longDate(forecast.day)}`;
+  bar.style.transition='none';bar.style.width='0%';requestAnimationFrame(()=>requestAnimationFrame(()=>{bar.style.transition='width .65s linear';bar.style.width='100%';}));
+  nextEmailTimer=setTimeout(()=>{nextEmailTimer=null;completeNextScheduledAdvance(false);},700);
+}
+function completeNextScheduledAdvance(skipped){
+  const forecast=getNextScheduledItem();if(!forecast){document.getElementById('advanceOverlay')?.classList.add('hidden');render();return;}
+  const before=S.emails.length;let guard=90;
+  while(guard-- >0){
+    if(forecast.day<=S.day && forecast.type==='email'){maybeDeliverStageEmail();processExtraEmails();flushPendingEmails();}
+    if(S.emails.length>before)break;
+    if(forecast.type==='human-review'&&S.humanReview)break;
+    S.day++;processDay(false);
+    if(S.emails.length>before)break;
+    if(['PAY','IM','EXIT','HUMAN'].includes(deriveStage())&&getNextScheduledItem()===null)break;
+  }
+  document.getElementById('advanceOverlay')?.classList.add('hidden');render();
+  const newest=[...S.emails].sort((a,b)=>b.seq-a.seq)[0];
+  if(newest&&newest.seq>0&&!isVisibleToViewer(newest)) toast(`The new email went to ${newest.recipientName}. Switch persona to see their inbox.`);
+  else if(skipped)toast('Jumped to the next lifecycle event.');
+}
+
+function inboxRows(){ensureReviewState();return [...S.emails].filter(isVisibleToViewer).sort((a,b)=>b.day-a.day||b.seq-a.seq);}
+function renderMailRow(e){
+  const lifecycle=!e.slot.startsWith('X.');const sender=lifecycle?'Sonia Rahman':e.recipientName;
+  const date=e.day<0?'Yesterday':shortDate(e.day);
+  const label=`Open email from ${sender}: ${e.subject}`;
+  return `<div class="mail-row ${e.read?'':'unread'} ${e.newmail?'newmail':''}" role="button" tabindex="0" aria-label="${esc(label)}" onclick="openEmail('${e.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmail('${e.id}')}" ><div class="check" onclick="event.stopPropagation()"></div><div class="star" onclick="event.stopPropagation();this.textContent=this.textContent==='★'?'☆':'★';this.style.color='#f4b400'">☆</div><div class="mail-sender">${sender}</div><div class="mail-subject">${esc(e.subject)} <span class="mail-preview">— ${esc(e.preview)}</span></div><div class="mail-date">${date}</div></div>`;
+}
+function renderInbox(){
+  const rows=inboxRows();let top='';const st=deriveStage();
+  if(S.humanReview) top='<div class="system-row">⚑ <strong>Human review queue:</strong> No fund-in by C2 day 21. Automated lifecycle is stopped.</div>';
+  if(st==='PAY') top='<div class="handoff-row">↗ <strong>Super Pay handoff:</strong> Product selected. GRO-2132 card lifecycle has exited.</div>';
+  if(st==='EXIT') top='<div class="handoff-row">✓ <strong>Lifecycle complete:</strong> First successful purchase recorded.</div>';
+  if(st==='IM') top='<div class="handoff-row">✓ <strong>Human handoff:</strong> An IM is now looking after setup; automated stage emails are paused.</div>';
+  const terminal=['PAY','EXIT','IM','HUMAN'].includes(st)?`<div class="terminal-summary"><strong>Journey ended in ${stageLabel()}</strong><span>Review every email, recipient and action.</span><button onclick="showSummary()">View summary</button></div>`:'';
+  return `<div class="mail-toolbar"><button class="iconbtn" onclick="decorative('Select all')">▢</button><button class="iconbtn" onclick="decorative('Refresh')">↻</button><button class="iconbtn" onclick="decorative('More')">⋮</button><div class="toolbar-spacer"></div><span style="font-size:12px">1–${rows.length} of ${rows.length}</span><button class="iconbtn" onclick="decorative('Previous page')">‹</button><button class="iconbtn" onclick="decorative('Next page')">›</button></div>${top}${terminal}<div class="mail-list">${rows.length?rows.map(renderMailRow).join(''):`<div class="empty-state">No messages for the ${viewerRole()} persona yet.<br><span style="font-size:12px">Use <strong>Next email</strong> or switch persona.</span></div>`}</div>`;
+}
+function recipientLine(e){
+  ensureReviewState();
+  if(S.viewerPersona==='admin'){
+    if(e.recipient==='admin'||recipientKey(e.recipient)==='admin')return 'to me';
+    return `to ${e.recipientName} · me copied`;
+  }
+  if(S.viewerPersona==='cardholder') return e.recipient==='cardholder'?`to me · ${PERSON.admin_name} copied`:`to ${e.recipientName}`;
+  if(S.viewerPersona==='payer') return e.recipient==='payer'?`to me · ${PERSON.admin_name} copied`:`to ${e.recipientName}`;
+  return `to ${e.recipientName}`;
+}
+function renderReader(){
+  const e=S.emails.find(x=>x.id===S.currentEmailId);if(!e||!isVisibleToViewer(e)){S.currentView='inbox';return renderInbox();}
+  const who=recipientLine(e);
+  return `<div class="mail-toolbar"><button class="iconbtn" onclick="goInbox()">←</button><button class="iconbtn" onclick="decorative('Archive')">▣</button><button class="iconbtn" onclick="decorative('Report spam')">!</button><button class="iconbtn" onclick="decorative('Delete')">⌫</button><button class="unread-btn" title="Mark unread" onclick="markUnreadAndInbox()">✉</button><button class="iconbtn" onclick="decorative('Snooze')">◷</button><div class="toolbar-spacer"></div><button class="iconbtn" onclick="decorative('Move')">▣</button><button class="iconbtn" onclick="decorative('Open in new window')">↗</button></div><div class="reader"><div class="reader-head"><h1 class="reader-subject">${esc(e.subject)} <span class="inbox-label">Inbox ×</span><span class="persona-badge">${viewerRole()}</span></h1><div class="sender-line"><div class="sender-avatar">S</div><div class="sender-meta"><strong>Sonia Rahman</strong> <span class="sender-address">&lt;sonia@alaanpay.com&gt;</span><br><span class="sender-address">${who} ▾</span></div><div class="timestamp">${longDate(e.day)} · Day ${e.day} · ${e.slot}</div><button class="iconbtn" onclick="decorative('Star')">☆</button><button class="iconbtn" onclick="toast('Reply draft opened')">↩</button><button class="iconbtn" onclick="decorative('More')">⋮</button></div></div><div class="email-wrap">${renderEmailBody(e.slot)}</div><div class="gmail-replybar"><button class="replybtn" onclick="toast('Reply draft opened')">↩ Reply</button><button class="replybtn" onclick="toast('Forward draft opened')">↪ Forward</button></div></div>`;
+}
+function markUnreadAndInbox(){const e=S.emails.find(x=>x.id===S.currentEmailId);if(e)e.read=false;goInbox();toast('Marked unread.');}
+
+footer=function(){
+  const rec=templates[CURRENT_RENDER_SLOT]?.recipient||'admin';
+  let reason=`You received this email because ${PERSON.company_name} signed up for an Alaan account and nominated you as an account administrator.`;
+  let extra=`If this was a mistake, please reply to this email. <span class="unsubscribe" onclick="unsubscribe(event)">Unsubscribe</span>`;
+  if(rec==='cardholder'){reason=`You received this email because ${PERSON.company_name} assigned you an Alaan company card.`;extra='If you have any questions, reply to this email.';}
+  if(rec==='payer'){reason=`You received this email because ${PERSON.admin_name} asked Alaan to send transfer details for ${PERSON.company_name}.`;extra=`${PERSON.admin_name} is copied on this email.`;}
+  return `<div class="footer-box"><div>Need Assistance? Visit <strong>alaan.com/help</strong></div><div class="footer-divider"></div><div>${reason}</div><div style="margin-top:12px">${extra}</div></div>`;
+};
+bodyWrap=function(inner,showBanner=false){return `${showBanner?banner():''}<div class="email-body">${inner}</div>${footer()}`;};
+function prototypeNote(text){return `<div class="prototype-note"><strong>Prototype annotation · not part of the email</strong><br>${text}</div>`;}
+renderEmailBody=function(slot){
+  CURRENT_RENDER_SLOT=slot;const cardholder=S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name;
+  switch(slot){
+    case 'RF.0': return bodyWrap(`<p>Hi,</p><p>${PERSON.admin_name} at ${PERSON.company_name} asked Alaan to send you the transfer details for their Alaan account. ${PERSON.admin_name} is copied here.</p><p class="lead">Transfer details</p><div class="attachment"><div class="pdf">PDF</div><div><strong>${PERSON.company_name} · bank details.pdf</strong><br><span style="font-size:12px;color:#70758b">Bank details shared by ${PERSON.admin_name}</span></div></div>${btn('View the details','payer-details')}<p>Thanks,<br>Sonia</p>`);
+    case 'C0.3': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>Setting up Alaan isn't a job for a quieter week. It's three steps.</p><p class="lead">Three steps, one sitting:</p><div class="step-strip"><div class="step"><div class="step-num">1</div>Create your first company card</div><div class="step"><div class="step-num">2</div>Add funds to your wallet</div><div class="step"><div class="step-num">3</div>Make your first purchase</div></div><p>Most companies get through all three in one go. Once the card is active, you're ready for the next two steps.</p>${btn('Log in to Alaan','login-select')}<p>Thanks,<br>Sonia</p>`);
+    case 'C1.0': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name} is set up for Super Card. The next step is creating your first company card.</p><p>Make it virtual and <span class="provisional">it's ready to use straight away</span>. You set the spending limit, choose where it works, and can change or freeze it whenever you want. It can be yours or anyone's on the team, and one card is enough to get the account going. Physical cards are available too, with <span class="provisional">delivery timing still to be confirmed</span>.</p><div class="open-marker">[OPEN: confirm immediate virtual-card usability, physical-card delivery time, and whether “assign company cards” remains a separate checklist tile. Provisional claims above are greyed.]</div><p>Once available, your card details sit in Alaan under cards, ready to copy into any checkout.</p><p class="lead">Your setup checklist:</p><div class="checklist"><div class="checktile next"><span class="tinyflag">NEXT</span><div class="thumb">💳</div>Create your first card</div><div class="checktile"><div class="thumb">＋</div>Add funds to your wallet</div><div class="checktile"><div class="thumb">✓</div>Make your first purchase</div></div>${btn('Create the first card','create-card')}<p>Thanks,<br>Sonia</p>`,true);
+    case 'C2.0': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>The first company card for ${PERSON.company_name} is active. It needs funds on the account before it can be used.</p><p>Funding works by bank transfer from your company bank account. The details you need are in Alaan under your account section.</p><p class="lead">One thing to know before you look:</p><div class="callout"><strong>[COMPLIANCE-1]</strong><br>Approved wording explaining that the beneficiary name shown will be our banking partner rather than Alaan, and that this is expected. Do not invent regulatory language.</div><p>Add whatever you need to get started. There's no minimum, and you can top up any time.</p>${btn('View bank details','view-bank')}<p>If someone else at ${PERSON.company_name} makes the bank transfers, you can send the details straight to them from Alaan.</p><p>Thanks,<br>Sonia</p>`,true);
+    case 'C2.1': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>Here's the whole thing from start to finish.</p><div class="timeline"><div class="timeline-item"><div class="timeline-n">1</div><div><strong>Add the beneficiary.</strong> Add the account as a beneficiary in ${PERSON.company_name}'s online banking, using the details in Alaan. Some UAE banks take a few hours to approve a new beneficiary before you can send anything to it, so it's worth doing this part today even if you're transferring later in the week.</div></div><div class="timeline-item"><div class="timeline-n">2</div><div><strong>Send the transfer.</strong> Any amount. Most companies start small and top up once they're using the card.</div></div><div class="timeline-item"><div class="timeline-n">3</div><div><strong>We'll let you know.</strong> The balance updates in Alaan and we'll email you as soon as the funds are available.</div></div></div><div class="open-marker">[PAYMENTS-1: swap step 3 for “funds usually appear within a few hours” only if approved]</div>${btn('View bank details','view-bank')}<p>Thanks,<br>Sonia</p>`);
+    case 'C2.3': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>If you're not the person who makes transfers at ${PERSON.company_name}, this email is built to be forwarded. The PDF attached has everything your finance team needs and nothing else is required from you.</p><div class="attachment"><div class="pdf">PDF</div><div><strong>${PERSON.company_name} · bank details.pdf</strong><br><span style="font-size:12px;color:#70758b">Transfer details</span></div></div><p>There's also a better way to do it. Use Request Funds in Alaan: enter their email and the amount, and we'll send the details straight to them with you copied, then follow up with them directly so you don't have to chase.</p>${btn('Request funds','request-funds')}<p>Thanks,<br>Sonia</p>`)+prototypeNote('The attached PDF also contains the unresolved [COMPLIANCE-1] beneficiary explanation. This annotation is deliberately outside the email body.');
+    case 'C2.14': return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name}'s account and first card are set up and waiting on funds.</p><p>If now is a better time, the bank details are in Alaan under your account section. Add whatever you need to get started.</p>${btn('View bank details','view-bank')}<p>If you'd rather stop hearing from me about this, unsubscribe below.</p><p>Thanks,<br>Sonia</p>`);
+    case 'RF.3': return bodyWrap(`<p>Hi,</p><p>${PERSON.admin_name} at ${PERSON.company_name} asked me to send you bank details for their Alaan account a few days ago, and the transfer hasn't come through yet.</p><p>The details and the PDF are in that earlier email. ${PERSON.admin_name} is copied here, so if this should go to someone else at ${PERSON.company_name}, just let them know.</p>${btn('View the details','payer-details')}<p>Thanks,<br>Sonia</p>`);
+    case 'C3.1': return bodyWrap(`<p>Hi ${cardholder},</p><p>If you've been waiting for approval to use the card, you already have it.</p><p>${PERSON.admin_name} set the limit when the card was created, so anything within it is already approved. Every transaction shows up in Alaan as it happens, so there's nothing to report afterwards and no expense claim to file. Add the receipt from your phone and you're done.</p>${btn('Open Alaan','card-detail')}<p>Thanks,<br>Sonia</p>`);
+    case 'C3.3': return bodyWrap(`<p>Hi ${cardholder},</p><p>If you've tried using the card and it didn't go through, it's most often the account balance rather than anything wrong with the card.</p><p>Alaan cards spend from the company's balance, so a payment larger than what's on the account will be declined even if the card limit is higher. ${PERSON.admin_name} can top up in a couple of minutes. If the balance looks low, let them know and try again after funds arrive.</p>${btn(`Let ${PERSON.admin_name.split(' ')[0]} know`,'notify-admin')}<p>Thanks,<br>Sonia</p>`);
+    default: return _baseEmailBody(slot);
+  }
+};
+
+function openAction(target){
+  if(target==='payer-details'){S.currentView='standalone';S.appTarget='payer-details';render();return;}
+  if(target==='notify-admin'){logAction(`${viewerName()} notified ${PERSON.admin_name} that the company balance may need a top-up`);toast(`${PERSON.admin_name} has been notified to check the balance.`);return;}
+  S.appTarget=target;S.currentView='alaan';render();
+}
+function render(){
+  ensureReviewState();updateSimulator();const surface=document.getElementById('surface');
+  if(S.currentView==='inbox')surface.innerHTML=renderInbox();
+  else if(S.currentView==='reader')surface.innerHTML=renderReader();
+  else if(S.currentView==='alaan')surface.innerHTML=renderAlaan();
+  else if(S.currentView==='standalone')surface.innerHTML=renderPayerDetails();
+}
+function renderPayerDetails(){
+  return `<div class="standalone-shell"><div class="standalone-card"><div class="standalone-head"><div class="brand">ALAAN</div><div>Shared transfer details</div><button onclick="goInbox()">← Back to Gmail</button></div><div class="standalone-body"><span class="role-tag">No Alaan login required</span><h1 style="font-size:24px;color:#11163e;margin:14px 0 8px">Transfer details for ${PERSON.company_name}</h1><p style="color:#697086;line-height:1.55">${PERSON.admin_name} asked Alaan to share these bank details with you.</p><div class="callout"><strong>[COMPLIANCE-1]</strong><br>Approved beneficiary-name explanation is unresolved. The payer must see this explanation here and in the PDF before launch.</div><div class="bank-details"><div class="bank-line"><span class="lab">Beneficiary</span><span class="val">NYMCARD PAYMENT SERVICES L.L.C</span></div><div class="bank-line"><span class="lab">Bank</span><span class="val">Mashreq Bank</span></div><div class="bank-line"><span class="lab">IBAN</span><span class="val">AE•• •••• •••• •••• 4821</span></div><div class="bank-line"><span class="lab">Currency</span><span class="val">AED</span></div></div><div class="attachment"><div class="pdf">PDF</div><div><strong>${PERSON.company_name} · bank details.pdf</strong><br><span style="font-size:12px;color:#70758b">Same transfer details, ready to forward internally</span></div></div><button class="outline-action" onclick="goInbox()">Back to inbox</button></div></div></div>`;
+}
+renderLogin=function(next){
+  const name=viewerName();const email=S.viewerPersona==='cardholder'?'karim@meridiantrading.ae':'rana@meridiantrading.ae';
+  return `<div class="product-shell" style="max-width:480px"><h1>Log in to Alaan</h1><div class="sub">Continue as ${name} to preview this lifecycle.</div><div class="app-card"><div class="field"><label>Work email</label><input value="${email}" disabled></div><div style="height:14px"></div><button class="big-action" onclick="completeLogin('${next}')">Log in</button><button class="outline-action" style="margin-left:8px" onclick="goInbox()">Cancel</button></div></div>`;
+};
+chooseProduct=function(p){const prev=deriveStage();S.productSelected=p;logAction(`Product selected: ${p==='card'?'Super Card':'Super Pay'}`);updateStageAfterAction(prev);S.currentView='inbox';S.appTarget=null;toast(p==='card'?'Super Card selected. The first C1 email will send on the next available day.':'Super Pay selected. Lifecycle handed off.');render();};
+createCard=function(){const type=document.getElementById('cardType').value;const prev=deriveStage();S.cardCreated=true;S.cardActivationDueDay=S.day+(type==='virtual'?1:3);logAction(`First ${type} company card created; activation scheduled day ${S.cardActivationDueDay}`);updateStageAfterAction(prev);S.currentView='inbox';toast(`Card created. It activates on ${longDate(S.cardActivationDueDay)} in the simulation.`);render();};
+sendRequestFunds=function(){
+  if(!S.requestFundsSent){S.requestFundsSent=true;S.requestFundsDay=S.day;logAction(`Request Funds sent to ${PERSON.payer_name}`);deliver('RF.0',{extra:true});}
+  processExtraEmails();flushPendingEmails();toast(`Transfer details were emailed to ${PERSON.payer_name}. C2 continues; RF.3 remains scheduled for +3 days if no funds arrive.`);goInbox();
+};
+addFunds=function(){const amt=Math.max(1,Number(document.getElementById('fundAmount').value||0));const prev=deriveStage();S.balance+=amt;S.funded=true;logAction(`Fund-in recorded: AED ${amt}`);updateStageAfterAction(prev);S.currentView='inbox';toast(`AED ${amt} added. C3 is now active.`);render();};
+makePurchase=function(){const amt=Number(document.getElementById('purchaseAmount').value||0);if(amt>S.balance){logAction(`Purchase declined: AED ${amt} > balance AED ${S.balance}`);toast('Payment declined — the wallet balance is too low. C3 continues.');return;}const prev=deriveStage();S.balance-=amt;S.purchased=true;logAction(`First successful purchase: AED ${amt}`);updateStageAfterAction(prev);S.currentView='inbox';toast('Purchase approved. Lifecycle complete.');render();};
+bookCall=function(time){if(!S.imAssigned){S.imAssigned=true;cancelPending(p=>p.kind==='stage','Unsent stage emails cancelled after IM handoff');logAction(`Walkthrough booked for ${time}`);deliver('IM.0',{extra:true,exemptCap:true});}S.currentView='inbox';toast('Booked. Automated stage emails are paused and IM.0 was sent.');render();};
+unsubscribe=function(ev){ev&&ev.stopPropagation();S.unsubscribed=true;cancelPending(p=>templates[p.slot]?.recipient==='admin','Pending Admin emails removed after unsubscribe');logAction('Admin unsubscribed from automated setup emails');toast('Admin lifecycle emails are now suppressed. Payer emails from Request Funds still continue.');render();};
+
+togglePersona=function(){S.cardholderIsAdmin=!S.cardholderIsAdmin;logAction(`Cardholder assignment: ${S.cardholderIsAdmin?'Admin is cardholder':'Separate cardholder'}`);render();};
+toggleSim=function(){document.getElementById('simPanel')?.classList.toggle('hidden');};
+function nextItemDescription(item){
+  if(!item)return {date:'No automated email scheduled',subject:'Take an action in the journey to continue.',to:''};
+  if(item.type==='human-review')return {date:`${longDate(item.day)} · Day ${item.day}`,subject:'Move the corporate to the human review queue',to:'Lifecycle event · no email'};
+  const t=templates[item.slot];return {date:`${longDate(item.day)} · Day ${item.day}`,subject:`${item.slot} · ${merge(t.subject)}`,to:`To ${recipientName(t.recipient)}${t.recipient==='payer'||t.recipient==='cardholder'?' · Admin copied':''}`};
+}
+updateSimulator=function(){
+  ensureReviewState();const dayEl=document.getElementById('simDay'),stageEl=document.getElementById('simStage');if(dayEl)dayEl.textContent=`${S.day} · ${shortDate(S.day)}`;if(stageEl)stageEl.textContent=stageLabel();
+  const toggle=document.getElementById('personaToggle');toggle&&toggle.classList.toggle('on',S.cardholderIsAdmin);
+  const select=document.getElementById('viewerPersona');if(select)select.value=S.viewerPersona;
+  const hint=document.getElementById('personaHint');if(hint){hint.textContent=S.viewerPersona==='admin'?`${PERSON.admin_name} sees Admin emails plus copies of Cardholder and Payer emails.`:(S.viewerPersona==='cardholder'?`${S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name} sees the first-purchase emails sent to the cardholder.`:`${PERSON.payer_name} only sees Request Funds emails and never needs an Alaan login.`);}
+  const flags=[['Product',S.productSelected||'none'],['Card',S.cardCreated?'created':'none'],['Active',S.cardActivated?'yes':'no'],['Funded',S.funded?`AED ${S.balance}`:'no'],['Purchase',S.purchased?'yes':'no'],['Request Funds',S.requestFundsSent?'sent':'no'],['Admin unsub',S.unsubscribed?'yes':'no']];
+  const el=document.getElementById('flags');if(el)el.innerHTML=flags.map(([k,v])=>`<span class="flag ${['none','no'].includes(String(v))?'':'on'}">${k}: ${v}</span>`).join('');
+  const note=document.getElementById('journeyNote');if(note){let txt='';const st=deriveStage(),age=S.day-S.stageStartDay;if(st==='C0')txt=`C0 day ${age}: choose a product or use Next email to see the next follow-up.`;if(st==='C1')txt=`C1 day ${age}: create the first company card.`;if(st==='ACT')txt=`Waiting for card activation on ${longDate(S.cardActivationDueDay)}.`;if(st==='C2')txt=`C2 day ${age}: funding is the active bottleneck.`;if(st==='C3')txt=`C3 day ${age}: make the first successful purchase.`;if(st==='PAY')txt='Super Pay selected. Card lifecycle has exited.';if(st==='IM')txt='IM assigned. Automated stage emails are paused.';if(st==='EXIT')txt='Journey complete after the first successful purchase.';if(st==='HUMAN')txt='Automation ended; this corporate is in the human review queue.';note.textContent=txt;}
+  const item=getNextScheduledItem(),desc=nextItemDescription(item);const d=document.getElementById('nextEmailDate'),s=document.getElementById('nextEmailSubject'),to=document.getElementById('nextEmailTo'),btnEl=document.getElementById('nextEmailBtn');if(d)d.textContent=desc.date;if(s)s.textContent=desc.subject;if(to)to.textContent=desc.to;if(btnEl){btnEl.disabled=!item;btnEl.textContent=item?(item.type==='email'?`Next email → ${shortDate(item.day)}`:`Next event → ${shortDate(item.day)}`):'No next email';}
+  const count=document.getElementById('inboxCount');if(count)count.textContent=S.emails.filter(e=>!e.read&&isVisibleToViewer(e)).length;
+  const vf=document.getElementById('viewerFooter');if(vf)vf.textContent=`${viewerName()} · ${viewerRole()}`;
+  const vc=document.getElementById('viewerChip');if(vc)vc.textContent=`${viewerRole()} · ${viewerName().split(' ')[0]}`;
+};
+
+showSummary=function(){
+  const lifecycle=S.emails.filter(e=>!e.slot.startsWith('X.')).sort((a,b)=>a.day-b.day||a.seq-b.seq);
+  const rows=lifecycle.map(e=>`<tr><td>${shortDate(e.day)}<br><span style="color:#8990a3">Day ${e.day}</span></td><td>${e.slot}</td><td>${esc(e.subject)}</td><td>${e.recipientName}${e.ccAdmin?'<br><span style="color:#8990a3">Admin copied</span>':''}</td><td><span class="statuspill ${e.read?'green':''}">${e.read?'Opened':'Unopened'}</span></td></tr>`).join('');
+  showModal('Journey summary',`<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px"><div><table class="summary-table"><thead><tr><th>Date</th><th>Slot</th><th>Email</th><th>Recipient</th><th>Status</th></tr></thead><tbody>${rows||'<tr><td colspan="5">No lifecycle emails sent.</td></tr>'}</tbody></table></div><div><h3 style="margin-top:0;color:#151a42">Actions</h3>${S.actions.map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee;font-size:12px"><strong>${shortDate(a.day)} · Day ${a.day}</strong><br>${esc(a.label)}</div>`).join('')}</div></div>`);
+};
+showAllTemplates=function(){const order=['C0.0','C0.1','C0.3','C0.7','C1.0','C1.1','C1.3','C1.7','C2.0','C2.1','C2.3','C2.3-RF','C2.7','C2.14','RF.0','RF.3','FT.1','C3.0','C3.1','C3.3','C3.7','IM.0'];showModal('Lifecycle email map',`<table class="summary-table"><thead><tr><th>Slot</th><th>Subject</th><th>Primary recipient</th></tr></thead><tbody>${order.map(k=>`<tr><td>${k}</td><td>${esc(templates[k].subject)}</td><td>${templates[k].recipient}</td></tr>`).join('')}</tbody></table>`);};
+function showComplianceView(){
+  showModal('Compliance and Payments review',`<div class="notice warn"><strong>Only unresolved copy is shown here.</strong> Nothing below has been filled in by the prototype.</div><table class="summary-table"><thead><tr><th>Marker</th><th>Where it appears</th><th>What is needed</th></tr></thead><tbody><tr><td><strong>[COMPLIANCE-1]</strong></td><td>C2.0 email</td><td>Approved explanation that the beneficiary shown is the banking partner rather than Alaan.</td></tr><tr><td><strong>[COMPLIANCE-1]</strong></td><td>C2.3 bank-details PDF</td><td>The same approved explanation must survive forwarding.</td></tr><tr><td><strong>[COMPLIANCE-1]</strong></td><td>Bank details screen + payer standalone details view</td><td>Same wording before a customer or payer acts on the beneficiary details.</td></tr><tr><td><strong>[PAYMENTS-1]</strong></td><td>C2.1 · step 3</td><td>Confirm whether “funds usually appear within a few hours” is approved.</td></tr></tbody></table>`);
+}
+function decorative(label){toast(`${label} is decorative in this prototype.`);}
+
+function resetPrototype(){
+  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null;}if(nextEmailTimer){clearTimeout(nextEmailTimer);nextEmailTimer=null;}advanceQueue=0;
+  S=initialState();ensureReviewState();S.viewerPersona='admin';seed();render();toast('Journey reset to day 0.');
+}
+function rawAdvance(days){for(let i=0;i<days;i++){S.day++;processDay(false);}}
+function scenarioSelectCard(){const prev=deriveStage();S.productSelected='card';logAction('Scenario action: Super Card selected');updateStageAfterAction(prev);}
+function scenarioCreateVirtual(){const prev=deriveStage();S.cardCreated=true;S.cardActivationDueDay=S.day+1;logAction(`Scenario action: virtual card created; activates day ${S.cardActivationDueDay}`);updateStageAfterAction(prev);}
+function scenarioFund(amount){const prev=deriveStage();S.balance+=amount;S.funded=true;logAction(`Scenario action: fund-in AED ${amount}`);updateStageAfterAction(prev);}
+function scenarioPurchase(amount){if(amount>S.balance){logAction(`Scenario action: purchase declined at AED ${amount}`);return false;}const prev=deriveStage();S.balance-=amount;S.purchased=true;logAction(`Scenario action: purchase succeeded at AED ${amount}`);updateStageAfterAction(prev);return true;}
+function scenarioBook(){S.imAssigned=true;cancelPending(p=>p.kind==='stage');logAction('Scenario action: walkthrough booked at C1.7');deliver('IM.0',{extra:true,exemptCap:true});}
+function runScenario(){
+  const sel=document.getElementById('scenarioSelect');const v=sel?sel.value:'ignore';
+  S=initialState();ensureReviewState();S.viewerPersona='admin';seed();
+  if(v==='ignore'){rawAdvance(7);}
+  if(v==='immediate'){scenarioSelectCard();rawAdvance(1);scenarioCreateVirtual();rawAdvance(1);scenarioFund(1000);scenarioPurchase(250);}
+  if(v==='book-c1'){scenarioSelectCard();rawAdvance(7);scenarioBook();}
+  if(v==='delegate'){scenarioSelectCard();rawAdvance(1);scenarioCreateVirtual();rawAdvance(1);S.requestFundsSent=true;S.requestFundsDay=S.day;deliver('RF.0',{extra:true});logAction(`Scenario action: Request Funds sent to ${PERSON.payer_name}`);rawAdvance(3);}
+  if(v==='decline'){scenarioSelectCard();rawAdvance(1);scenarioCreateVirtual();rawAdvance(1);scenarioFund(300);scenarioPurchase(500);rawAdvance(3);}
+  S.currentView='inbox';render();toast('Scenario loaded. Switch personas to inspect who received what.');
+}
+
+function installReviewUI(){
+  const top=document.querySelector('.top-actions');
+  if(top&&!document.getElementById('viewerChip')){
+    const b=document.createElement('button');b.id='viewerChip';b.className='lifecycle-chip';b.type='button';b.onclick=toggleSim;b.textContent='Admin · Rana';top.insertBefore(b,top.querySelector('.avatar'));
+  }
+  const panel=document.getElementById('simPanel');
+  if(panel){panel.innerHTML=`<div class="sim-head"><div><h3>Lifecycle simulator</h3><p>GRO-2132 · email-by-email review</p></div><button class="sim-close" onclick="toggleSim()" aria-label="Close simulator">×</button></div><div class="sim-body"><div class="status-grid"><div class="statusbox"><div class="k">Day · date</div><div class="v" id="simDay">0</div></div><div class="statusbox"><div class="k">Stage</div><div class="v" id="simStage">C0</div></div></div><div class="persona-card"><label for="viewerPersona">Viewing inbox as</label><select id="viewerPersona" onchange="setViewerPersona(this.value)"><option value="admin">Admin · Rana Haddad</option><option value="cardholder">Cardholder · Karim Nasser</option><option value="payer">Payer / funder · Ahmed Farouk</option></select><div class="persona-hint" id="personaHint"></div></div><div class="next-card"><div class="k">Next lifecycle event</div><div class="date" id="nextEmailDate"></div><div class="subject" id="nextEmailSubject"></div><div class="to" id="nextEmailTo"></div></div><div class="sim-actions review"><button id="nextEmailBtn" class="simbtn primary next-primary" onclick="advanceToNextEmail()">Next email</button><button class="simbtn" onclick="queueAdvance(1)">Next day</button><button class="simbtn" onclick="queueAdvance(14)">+14 days</button><button class="simbtn" onclick="showSummary()">Summary</button></div><div class="scenario-box"><label>Scenario picker</label><div class="scenario-run"><select id="scenarioSelect"><option value="ignore">Ignore setup through day 7</option><option value="immediate">Act immediately · happy path</option><option value="book-c1">Book a call at C1.7</option><option value="delegate">Delegate via Request Funds</option><option value="decline">Fund AED 300 · hit decline</option></select><button class="simbtn" onclick="runScenario()">Run</button></div></div><div class="sim-row"><span>Cardholder is Admin</span><button class="toggle" id="personaToggle" onclick="togglePersona()" aria-label="Toggle whether Admin is also the cardholder"></button></div><div class="sim-row"><span>Optional FT.1 demo event</span><button class="simbtn" style="padding:6px 8px" onclick="markTransferSent()">Mark sent</button></div><div class="flags" id="flags"></div><div class="journey-note" id="journeyNote"></div><div class="sim-links"><button class="sim-link" onclick="showState()">View state</button><button class="sim-link" onclick="showAllTemplates()">Email map</button><button class="sim-link" onclick="showComplianceView()">Compliance view</button></div><button class="simbtn full" style="width:100%;margin-top:10px" onclick="resetPrototype()">Reset journey</button></div>`;}
+  const lf=document.querySelector('.left-footer');if(lf)lf.innerHTML=`Alaan lifecycle prototype<br><span id="viewerFooter">${PERSON.admin_name} · Admin</span>`;
+}
+function installChromeHandlers(){
+  document.querySelectorAll('.navitem').forEach((n,i)=>{n.setAttribute('role','button');n.setAttribute('tabindex','0');const label=n.textContent.trim().replace(/\s+/g,' ');n.onclick=i===0?goInbox:()=>decorative(label);n.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();n.click();}};});
+  const search=document.querySelector('.search input');if(search)search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();decorative('Search');}});
+  document.querySelectorAll('.gmail-top .iconbtn').forEach(b=>{if(!b.onclick)b.onclick=()=>decorative(b.title||'Toolbar control');});
+}
+
+installReviewUI();
+installChromeHandlers();
+resetPrototype();
+</script>
+
+
+<style id="whiteboardPatchStyles">
+  .reply-thread{max-width:660px;margin:0 auto 14px;padding:0 18px}
+  .reply-message{margin:14px 0;border-top:1px solid #edf0f4;padding-top:16px}
+  .reply-meta{display:flex;gap:10px;align-items:flex-start}
+  .reply-avatar{width:34px;height:34px;border-radius:50%;background:#eef0f6;color:#343a55;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 auto}
+  .reply-who{font-size:13px;color:#252a43;line-height:1.35}
+  .reply-who span{color:#72788c;font-size:11px}
+  .reply-copy{margin:10px 0 0 44px;color:#4f5570;line-height:1.55;white-space:normal}
+  .reply-composer{max-width:660px;margin:0 auto 28px;padding:0 18px}
+  .reply-box{border:1px solid #dadce0;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(60,64,67,.08);overflow:hidden}
+  .reply-to{padding:12px 14px;border-bottom:1px solid #eceff2;color:#5f6368;font-size:12px}
+  .reply-to strong{color:#202124}
+  .reply-box textarea{width:100%;min-height:112px;border:0;outline:0;resize:vertical;padding:14px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#202124}
+  .reply-actions{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid #f0f1f3}
+  .send-reply{border:0;border-radius:18px;background:#0b57d0;color:#fff;padding:8px 18px;font-weight:700}
+  .cancel-reply{border:0;background:transparent;color:#5f6368;padding:8px 10px}
+  .funding-how{border:1px solid #ded8fb;background:#faf8ff;border-radius:12px;padding:15px 16px;margin:14px 0 20px;color:#3e4260}
+  .funding-how h3{font-size:14px;color:#1b214b;margin:0 0 9px}
+  .funding-how ol{margin:0;padding-left:18px}
+  .funding-how li{margin:6px 0;line-height:1.45}
+  .funding-dashboard-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+  .funding-stat{border:1px solid #e3e6ef;border-radius:12px;padding:16px;background:#fff}
+  .funding-stat .lab{font-size:11px;color:#767d92;text-transform:uppercase;letter-spacing:.05em}
+  .funding-stat .val{font-size:20px;font-weight:800;color:#141a45;margin-top:6px}
+  .fund-primary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;border:1px solid #dcdff0;border-radius:14px;padding:18px;background:linear-gradient(135deg,#fbfaff,#f3f0ff)}
+  .fund-primary h3{margin:0 0 5px;color:#171d49;font-size:17px}.fund-primary p{margin:0;color:#68708a;font-size:12px;line-height:1.45}
+  .celebrate{border:1px solid #d8d0ff;background:linear-gradient(135deg,#f8f5ff,#fff);border-radius:12px;padding:17px 18px;margin:14px 0 20px;position:relative;overflow:hidden}
+  .celebrate:after{content:"✦  ✧  ✦";position:absolute;right:18px;top:14px;color:#7c5ce0;font-size:18px;letter-spacing:6px}
+  .celebrate strong{font-size:16px;color:#211a55}.celebrate p{margin:6px 0 0!important;color:#565b77}
+  .substage-box{padding:10px 0;border-top:1px solid #282f57}
+  .substage-box label{display:block;color:#9fa7d0;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+  .substage-controls{display:flex;gap:6px}.substage-controls select{flex:1;min-width:0;border:1px solid #424a74;border-radius:8px;background:#12183a;color:#fff;padding:8px;font-size:11px;outline:none}
+  .advanced-time{margin-top:9px;border-top:1px solid #282f57;padding-top:8px}.advanced-time summary{cursor:pointer;color:#aeb5da;font-size:10px}.advanced-time .sim-actions{margin-top:8px}
+  .next-card .relative{display:inline-flex;margin-left:6px;padding:2px 6px;border-radius:10px;background:#2b335f;color:#cfd5f6;font-size:9px;font-weight:700}
+  .persona-card .role-lines{margin-top:8px;display:grid;gap:4px;font-size:9px;color:#aeb5da}.persona-card .role-lines strong{color:#fff}
+  @media(max-width:720px){.funding-dashboard-grid{grid-template-columns:1fr}.fund-primary{align-items:flex-start;flex-direction:column}}
+</style>
+<script id="whiteboardPatchScript">
+/* Whiteboard review patch: functional replies, funding dashboard flow, clearer next-email timing, substage selector, stronger subjects, and celebratory fund-in milestone. */
+const _v2EmailBody = renderEmailBody;
+const _v2RenderAlaan = renderAlaan;
+const _v2RenderBankDetails = renderBankDetails;
+const _v2EmailExists = emailExists;
+
+// Stronger subject lines while keeping them short and specific.
+Object.assign(templates['C0.0'],{subject:'Your Alaan account is ready'});
+Object.assign(templates['C0.1'],{subject:'Which problem should Alaan solve first?'});
+Object.assign(templates['C0.3'],{subject:'You can finish setup in 10 minutes'});
+Object.assign(templates['C0.7'],{subject:'Want us to set this up with you?'});
+Object.assign(templates['C1.0'],{subject:'Your first company card takes minutes'});
+Object.assign(templates['C1.1'],{subject:'Start with just one company card'});
+Object.assign(templates['C1.3'],{subject:'Stop chasing receipts at month-end'});
+Object.assign(templates['C1.7'],{subject:'Get your first card live in 20 minutes'});
+Object.assign(templates['C2.0'],{subject:'Your card is active — one step left',preview:'Log in, then fund the company balance.',cta:'funding-dashboard'});
+Object.assign(templates['C2.1'],{subject:'How to fund Alaan in 3 simple steps',preview:'Beneficiary, transfer, balance.',cta:'view-bank'});
+Object.assign(templates['C2.3'],{subject:'Forward this to whoever makes transfers'});
+Object.assign(templates['C2.3-RF'],{subject:'Your funding request is still waiting'});
+Object.assign(templates['C2.7'],{subject:'What is blocking your first transfer?'});
+Object.assign(templates['C2.14'],{subject:'Ready to fund when you are'});
+Object.assign(templates['RF.3'],{subject:'Rana asked me to resend the transfer details'});
+Object.assign(templates['FT.1'],{subject:'Your transfer has not arrived yet'});
+Object.assign(templates['C3.0'],{subject:'Funds are in — you are ready to spend',preview:'Your company card can now be used.'});
+Object.assign(templates['C3.1'],{subject:'You are already approved to use the card'});
+Object.assign(templates['C3.3'],{subject:'Payment declined? Check this first'});
+Object.assign(templates['C3.7'],{subject:'Your funded card has not been used yet'});
+
+function ensureWhiteboardState(){
+  ensureReviewState();
+  if(typeof S.fundingGuideSent!=='boolean') S.fundingGuideSent=false;
+  if(!Array.isArray(S.demoCompletedSlots)) S.demoCompletedSlots=[];
+  for(const e of S.emails){if(!Array.isArray(e.replies))e.replies=[];if(typeof e.replyOpen!=='boolean')e.replyOpen=false;}
+}
+emailExists=function(slot){ensureWhiteboardState();return _v2EmailExists(slot)||S.demoCompletedSlots.includes(slot);};
+
+function howFundingWorksBlock(){
+  return `<div class="funding-how"><h3>How funds work in Alaan</h3><ol><li>Your company sends a bank transfer using the account details shown in Alaan.</li><li>When the transfer lands, it becomes the company’s shared Alaan balance.</li><li>Active company cards spend from that balance, while each card’s own limit still controls how much it can spend.</li><li>You can add more funds whenever you need them. There is no minimum funding amount.</li></ol></div>`;
+}
+
+renderEmailBody=function(slot){
+  CURRENT_RENDER_SLOT=slot;
+  const cardholder=S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name;
+  if(slot==='C2.0') return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>The first company card for ${PERSON.company_name} is active. There is one step left before it can be used: add funds to the company balance.</p>${howFundingWorksBlock()}<p class="lead">One thing to know before you start:</p><div class="callout"><strong>[COMPLIANCE-1]</strong><br>Approved wording explaining that the beneficiary name shown will be our banking partner rather than Alaan, and that this is expected. Do not invent regulatory language.</div><p>Log in to Alaan and choose <strong>Add funds</strong> from the dashboard. We will show the bank details there.</p>${btn('Log in to fund the account','funding-dashboard')}<p>If someone else at ${PERSON.company_name} makes bank transfers, you can send the details straight to them from Alaan.</p><p>Thanks,<br>Sonia</p>`,true);
+  if(slot==='C2.1') return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>You opened the funding flow, so here is the full process in one place.</p><div class="timeline"><div class="timeline-item"><div class="timeline-n">1</div><div><strong>Add the beneficiary.</strong> Add the account as a beneficiary in ${PERSON.company_name}'s online banking using the details shown in Alaan. Some UAE banks take time to approve a new beneficiary before a transfer can be sent.</div></div><div class="timeline-item"><div class="timeline-n">2</div><div><strong>Send the transfer.</strong> Transfer from the company bank account. There is no minimum amount, and you can add more funds later.</div></div><div class="timeline-item"><div class="timeline-n">3</div><div><strong>Funds appear in Alaan.</strong> Once the transfer is received, the company balance updates in Alaan and active cards can spend from it within their card limits.</div></div></div><div class="open-marker">[PAYMENTS-1: only add a specific funding-arrival time if Payments and Compliance approve it.]</div>${btn('View bank details','view-bank')}<p>Thanks,<br>Sonia</p>`);
+  if(slot==='C3.0') return bodyWrap(`<p>Hi ${cardholder},</p><div class="celebrate"><strong>Funds are in. ${PERSON.company_name} is ready to spend.</strong><p>The company balance is now available to its active Alaan cards.</p></div><p>The company card in your name is ready to use. Your full card details are in Alaan under cards, ready to copy into any checkout.</p><p>A simple first purchase is something the company already pays for, such as a software subscription or an ad account.</p>${btn('Make the first purchase','purchase')}<p>Thanks,<br>Sonia</p>`,true);
+  return _v2EmailBody(slot);
+};
+
+function renderFundingDashboard(){
+  return `<div class="product-shell"><h1>Welcome back, ${PERSON.first_name}</h1><div class="sub">${PERSON.company_name} · Home</div><div class="funding-dashboard-grid"><div class="funding-stat"><div class="lab">First company card</div><div class="val">Active</div><div style="margin-top:8px;color:#6b7288;font-size:12px">Ready once the company balance is funded.</div></div><div class="funding-stat"><div class="lab">Company balance</div><div class="val">AED ${Number(S.balance).toLocaleString()}</div><div style="margin-top:8px;color:#6b7288;font-size:12px">Shared by active Alaan cards.</div></div></div><div class="fund-primary"><div><h3>Add funds to start spending</h3><p>Open the transfer details, add the beneficiary in your company bank, and send the amount you want to use.</p></div><button class="big-action" onclick="startFundingFromDashboard()">Add funds</button></div>${howFundingWorksBlock()}<div class="callout"><strong>[COMPLIANCE-1]</strong><br>The beneficiary-name explanation must be approved before this flow launches.</div><button class="outline-action" onclick="goInbox()">Back to Gmail</button></div>`;
+}
+function startFundingFromDashboard(){
+  ensureWhiteboardState();
+  S.fundingGuideSent=true;
+  logAction('Clicked Add funds on the Alaan dashboard');
+  if(!emailExists('C2.1')){
+    deliver('C2.1',{extra:true,exemptCap:true});
+    logAction('C2.1 funding guide sent immediately after the user clicked Add funds');
+  }
+  S.appTarget='view-bank';S.currentView='alaan';render();toast('Sonia sent the funding steps to your inbox. Bank details are open here.');
+}
+renderAlaan=function(){
+  if(S.appTarget==='funding-dashboard'){
+    if(!S.loggedIn) return alaanShell(renderLogin('funding-dashboard'));
+    return alaanShell(renderFundingDashboard());
+  }
+  return _v2RenderAlaan();
+};
+renderBankDetails=function(openRequest=false){
+  let html=_v2RenderBankDetails(openRequest);
+  const sent=S.fundingGuideSent?`<div class="notice good">✓ Sonia has emailed the funding steps to ${PERSON.first_name} for reference.</div>`:'';
+  html=html.replace('<div class="sub">Use these details from your company bank account.</div>',`<div class="sub">Use these details from your company bank account.</div>${sent}${howFundingWorksBlock()}`);
+  return html;
+};
+
+function viewerEmail(){if(S.viewerPersona==='payer')return 'ahmed@meridiantrading.ae';if(S.viewerPersona==='cardholder'&&!S.cardholderIsAdmin)return 'karim@meridiantrading.ae';return 'rana@meridiantrading.ae';}
+function toggleReplyComposer(id){
+  ensureWhiteboardState();const e=S.emails.find(x=>x.id===id);if(!e)return;
+  e.replyOpen=!e.replyOpen;render();
+  if(e.replyOpen)setTimeout(()=>document.getElementById(`replyText_${id}`)?.focus(),30);
+}
+function sendReply(id){
+  ensureWhiteboardState();const e=S.emails.find(x=>x.id===id);if(!e)return;
+  const box=document.getElementById(`replyText_${id}`);const text=(box?.value||'').trim();
+  if(!text){toast('Write a reply first.');return;}
+  e.replies.push({from:viewerName(),email:viewerEmail(),text,day:S.day});e.replyOpen=false;e.read=true;
+  logAction(`${viewerName()} replied to Sonia on ${e.slot}`);
+  render();toast(`Reply sent from ${viewerName()} to Sonia.`);
+}
+function renderThreadReplies(e){
+  ensureWhiteboardState();if(!e.replies.length)return '';
+  return `<div class="reply-thread">${e.replies.map(r=>`<div class="reply-message"><div class="reply-meta"><div class="reply-avatar">${esc(r.from.charAt(0))}</div><div class="reply-who"><strong>${esc(r.from)}</strong> <span>&lt;${esc(r.email)}&gt;</span><br><span>to Sonia Rahman · ${longDate(r.day)}</span></div></div><div class="reply-copy">${esc(r.text).replace(/\n/g,'<br>')}</div></div>`).join('')}</div>`;
+}
+function renderReplyComposer(e){
+  if(!e.replyOpen)return '';
+  return `<div class="reply-composer"><div class="reply-box"><div class="reply-to"><strong>${esc(viewerName())}</strong> replying to Sonia Rahman &lt;sonia@alaanpay.com&gt;</div><textarea id="replyText_${e.id}" placeholder="Write a reply to Sonia…"></textarea><div class="reply-actions"><button class="send-reply" onclick="sendReply('${e.id}')">Send</button><button class="cancel-reply" onclick="toggleReplyComposer('${e.id}')">Cancel</button><span style="margin-left:auto;color:#8a8f9d;font-size:11px">This reply is logged in the prototype; it does not change lifecycle state.</span></div></div></div>`;
+}
+renderReader=function(){
+  ensureWhiteboardState();const e=S.emails.find(x=>x.id===S.currentEmailId);if(!e||!isVisibleToViewer(e)){S.currentView='inbox';return renderInbox();}
+  const who=recipientLine(e);
+  return `<div class="mail-toolbar"><button class="iconbtn" onclick="goInbox()">←</button><button class="iconbtn" onclick="decorative('Archive')">▣</button><button class="iconbtn" onclick="decorative('Report spam')">!</button><button class="iconbtn" onclick="decorative('Delete')">⌫</button><button class="unread-btn" title="Mark unread" onclick="markUnreadAndInbox()">✉</button><button class="iconbtn" onclick="decorative('Snooze')">◷</button><div class="toolbar-spacer"></div><button class="iconbtn" onclick="decorative('Move')">▣</button><button class="iconbtn" onclick="decorative('Open in new window')">↗</button></div><div class="reader"><div class="reader-head"><h1 class="reader-subject">${esc(e.subject)} <span class="inbox-label">Inbox ×</span><span class="persona-badge">${viewerRole()}</span></h1><div class="sender-line"><div class="sender-avatar">S</div><div class="sender-meta"><strong>Sonia Rahman</strong> <span class="sender-address">&lt;sonia@alaanpay.com&gt;</span><br><span class="sender-address">${who} ▾</span></div><div class="timestamp">${longDate(e.day)} · Day ${e.day} · ${e.slot}</div><button class="iconbtn" onclick="decorative('Star')">☆</button><button class="iconbtn" title="Reply" onclick="toggleReplyComposer('${e.id}')">↩</button><button class="iconbtn" onclick="decorative('More')">⋮</button></div></div><div class="email-wrap">${renderEmailBody(e.slot)}</div>${renderThreadReplies(e)}${renderReplyComposer(e)}<div class="gmail-replybar"><button class="replybtn" onclick="toggleReplyComposer('${e.id}')">↩ Reply as ${esc(viewerName().split(' ')[0])}</button><button class="replybtn" onclick="decorative('Forward')">↪ Forward</button></div></div>`;
+};
+
+function relativeToNow(day){const diff=day-S.day;if(diff<=0)return 'today';if(diff===1)return 'tomorrow';return `in ${diff} days`;}
+const _v2NextItemDescription=nextItemDescription;
+nextItemDescription=function(item){
+  const d=_v2NextItemDescription(item);if(!item)return d;
+  d.date=`${longDate(item.day)} · Day ${item.day}`;d.relative=relativeToNow(item.day);return d;
+};
+const _v2UpdateSimulator=updateSimulator;
+updateSimulator=function(){
+  _v2UpdateSimulator();ensureWhiteboardState();const item=getNextScheduledItem(),desc=nextItemDescription(item);
+  const d=document.getElementById('nextEmailDate');if(d)d.innerHTML=item?`${esc(desc.date)} <span class="relative">${esc(desc.relative)}</span>`:esc(desc.date);
+  const b=document.getElementById('nextEmailBtn');if(b){b.textContent=item?(item.type==='email'?'Next email':'Next event'):'No next email';}
+};
+
+function substageAge(slot){const m={'C0.0':0,'C0.1':1,'C0.3':3,'C0.7':7,'C1.0':0,'C1.1':1,'C1.3':3,'C1.7':7,'C2.0':0,'C2.1':1,'C2.3':3,'C2.3-RF':3,'C2.7':7,'C2.14':14,'C3.0':0,'C3.1':1,'C3.3':3,'C3.7':7};return m[slot]??0;}
+function priorSlots(slot){
+  const order={C0:['C0.0','C0.1','C0.3','C0.7'],C1:['C1.0','C1.1','C1.3','C1.7'],C2:['C2.0','C2.1','C2.3','C2.7','C2.14'],C3:['C3.0','C3.1','C3.3','C3.7']};
+  const st=slot.split('.')[0];const arr=order[st]||[];const normalized=slot==='C2.3-RF'?'C2.3':slot;const idx=arr.indexOf(normalized);return idx>0?arr.slice(0,idx):[];
+}
+function loadSubstage(){
+  const sel=document.getElementById('substageSelect');const slot=sel?.value;if(!slot||!templates[slot])return;
+  const keepViewer=S.viewerPersona||'admin';S=initialState();ensureReviewState();ensureWhiteboardState();S.viewerPersona=keepViewer;seed();
+  S.emails=S.emails.filter(e=>e.slot.startsWith('X.'));S.seq=3;S.demoCompletedSlots=priorSlots(slot);S.pendingEmails=[];
+  const age=substageAge(slot);S.day=age;S.stageStartDay=0;
+  if(slot.startsWith('C1.'))S.productSelected='card';
+  if(slot.startsWith('C2.')){S.productSelected='card';S.cardCreated=true;S.cardActivated=true;if(slot==='C2.3-RF'){S.requestFundsSent=true;S.requestFundsDay=0;}}
+  if(slot.startsWith('C3.')){S.productSelected='card';S.cardCreated=true;S.cardActivated=true;S.funded=true;S.balance=1000;}
+  if(slot.startsWith('RF.')){S.productSelected='card';S.cardCreated=true;S.cardActivated=true;S.requestFundsSent=true;S.requestFundsDay=0;S.viewerPersona='payer';}
+  if(slot==='IM.0'){S.imAssigned=true;S.viewerPersona='admin';}
+  if(templates[slot].recipient==='cardholder')S.viewerPersona='cardholder';if(templates[slot].recipient==='payer')S.viewerPersona='payer';
+  deliver(slot,{extra:true,exemptCap:true});const e=S.emails.find(x=>x.slot===slot);if(e){e.read=true;S.currentEmailId=e.id;S.currentView='reader';}
+  logAction(`Reviewer jumped directly to substage ${slot}`);render();toast(`Loaded ${slot} for review.`);
+}
+
+function installWhiteboardUI(){
+  const panel=document.getElementById('simPanel');if(!panel)return;
+  panel.innerHTML=`<div class="sim-head"><div><h3>Lifecycle simulator</h3><p>GRO-2132 · email-by-email review</p></div><button class="sim-close" onclick="toggleSim()" aria-label="Close simulator">×</button></div><div class="sim-body"><div class="status-grid"><div class="statusbox"><div class="k">Day · date</div><div class="v" id="simDay">0</div></div><div class="statusbox"><div class="k">Stage</div><div class="v" id="simStage">C0</div></div></div><div class="persona-card"><label for="viewerPersona">Viewing Gmail as</label><select id="viewerPersona" onchange="setViewerPersona(this.value)"><option value="admin">Admin · Rana Haddad</option><option value="cardholder">Cardholder · Karim Nasser</option><option value="payer">Payer / funder · Ahmed Farouk</option></select><div class="persona-hint" id="personaHint"></div><div class="role-lines"><div><strong>Admin</strong> owns setup and funding.</div><div><strong>Cardholder</strong> gets first-spend guidance.</div><div><strong>Payer / funder</strong> gets Request Funds details without an Alaan login.</div></div></div><div class="next-card"><div class="k">Next email / event</div><div class="date" id="nextEmailDate"></div><div class="subject" id="nextEmailSubject"></div><div class="to" id="nextEmailTo"></div></div><div class="sim-actions review" style="grid-template-columns:1fr 1fr"><button id="nextEmailBtn" class="simbtn primary next-primary" onclick="advanceToNextEmail()">Next email</button><button class="simbtn" onclick="showSummary()">Summary</button></div><div class="substage-box"><label for="substageSelect">Jump straight to a substage</label><div class="substage-controls"><select id="substageSelect"><option value="C0.0">C0.0 · Welcome</option><option value="C0.1">C0.1 · Product fork</option><option value="C0.3">C0.3 · 10-minute setup</option><option value="C0.7">C0.7 · Handover</option><option value="C1.0">C1.0 · Create first card</option><option value="C1.1">C1.1 · One card is enough</option><option value="C1.3">C1.3 · Month-end value</option><option value="C1.7">C1.7 · Card handover</option><option value="C2.0">C2.0 · First funding email</option><option value="C2.1">C2.1 · How funding works</option><option value="C2.3">C2.3 · Delegate funding</option><option value="C2.3-RF">C2.3-RF · Request still open</option><option value="C2.7">C2.7 · Funding blocker</option><option value="C2.14">C2.14 · Last automated touch</option><option value="C3.0">C3.0 · Funds received celebration</option><option value="C3.1">C3.1 · Permission to spend</option><option value="C3.3">C3.3 · Decline guidance</option><option value="C3.7">C3.7 · Purchase handover</option></select><button class="simbtn" onclick="loadSubstage()">Open</button></div></div><div class="scenario-box"><label>Scenario picker</label><div class="scenario-run"><select id="scenarioSelect"><option value="ignore">Ignore setup through day 7</option><option value="immediate">Act immediately · happy path</option><option value="book-c1">Book a call at C1.7</option><option value="delegate">Delegate via Request Funds</option><option value="decline">Fund AED 300 · hit decline</option></select><button class="simbtn" onclick="runScenario()">Run</button></div></div><div class="sim-row"><span>Cardholder is Admin</span><button class="toggle" id="personaToggle" onclick="togglePersona()" aria-label="Toggle whether Admin is also the cardholder"></button></div><div class="flags" id="flags"></div><div class="journey-note" id="journeyNote"></div><details class="advanced-time"><summary>More demo controls</summary><div class="sim-actions" style="grid-template-columns:1fr 1fr"><button class="simbtn" onclick="queueAdvance(1)">Next day</button><button class="simbtn" onclick="queueAdvance(14)">+14 days</button><button class="simbtn" onclick="markTransferSent()">Mark transfer sent</button><button class="simbtn" onclick="showComplianceView()">Compliance view</button></div></details><div class="sim-links"><button class="sim-link" onclick="showState()">View state</button><button class="sim-link" onclick="showAllTemplates()">Email map</button></div><button class="simbtn full" style="width:100%;margin-top:10px" onclick="resetPrototype()">Reset journey</button></div>`;
+  updateSimulator();
+}
+
+// Keep all emails visually from Sonia, including payer emails.
+const _v2RenderMailRow=renderMailRow;
+renderMailRow=function(e){return _v2RenderMailRow(e);};
+
+// Reset once so the starting inbox picks up the new subject lines.
+installWhiteboardUI();
+resetPrototype();
+installWhiteboardUI();
+</script>
+
+<script>
+// v4 · First-spend sequence rework — explicitly Sonia-led
+Object.assign(templates['C3.0'],{
+  subject:'Your Alaan card is ready to use',
+  preview:'Start with a company expense you already have.',
+  recipient:'cardholder',
+  cta:'purchase'
+});
+Object.assign(templates['C3.1'],{
+  subject:'Use your card for your next company expense',
+  preview:'There is nothing else to activate.',
+  recipient:'cardholder',
+  cta:'card-detail'
+});
+Object.assign(templates['C3.3'],{
+  subject:'One small purchase is enough to get started',
+  preview:'Try an expense your company already pays today.',
+  recipient:'cardholder',
+  cta:'card-detail'
+});
+Object.assign(templates['C3.7'],{
+  subject:'Still no first purchase — can I help?',
+  preview:'Reply to Sonia or book a quick call.',
+  recipient:'admin',
+  cta:'book'
+});
+
+const _v4EnsureWhiteboardState = ensureWhiteboardState;
+ensureWhiteboardState = function(){
+  _v4EnsureWhiteboardState();
+  if(typeof S.purchaseDeclined!=='boolean') S.purchaseDeclined=false;
+  if(typeof S.lastDeclinedAmount!=='number') S.lastDeclinedAmount=0;
+};
+
+const _v4RenderEmailBodyBase = renderEmailBody;
+renderEmailBody = function(slot){
+  ensureWhiteboardState();
+  const cardholder=S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name;
+  if(slot==='C3.0'){
+    return bodyWrap(`<p>Hi ${cardholder},</p><p>${PERSON.company_name} has funds in Alaan, so the company card in your name is ready to use.</p><p><strong>You do not need to create a new expense just to test it.</strong> Use it for something the company already pays for — for example a software subscription, an ad account or a travel booking.</p><div class="callout"><strong>Your first spend is simple:</strong><br>Open the card in Alaan, copy the card details and use it at checkout. ${PERSON.admin_name} is copied and can see the transaction in Alaan.</div>${btn('Use your card','purchase')}<p>If anything is unclear, reply to me and I’ll help.</p><p>Thanks,<br>Sonia</p>`,true);
+  }
+  if(slot==='C3.1'){
+    return bodyWrap(`<p>Hi ${cardholder},</p><p>There is nothing else you need to activate before using the card.</p><p>${PERSON.admin_name} already set the card limit and controls when the card was created. If the purchase is within those controls and there is enough money in the company balance, the card is ready to use.</p><p>After the purchase, add the receipt from your phone so the expense is complete in Alaan.</p>${btn('View card details','card-detail')}<p>If you are unsure whether a purchase will work, reply to me before you try it.</p><p>Thanks,<br>Sonia</p>`);
+  }
+  if(slot==='C3.3'){
+    if(S.purchaseDeclined){
+      const action=S.cardholderIsAdmin?btn('Check company balance','wallet'):btn(`Let ${PERSON.admin_name.split(' ')[0]} know`,'notify-admin');
+      return bodyWrap(`<p>Hi ${cardholder},</p><p>I noticed the first payment did not go through${S.lastDeclinedAmount?` for AED ${Number(S.lastDeclinedAmount).toLocaleString()}`:''}.</p><p>The card itself may be fine. Alaan cards spend from the company balance, so a payment can be declined when the available balance is lower than the purchase amount, even if the card limit is high enough.</p><div class="callout"><strong>What to do next</strong><br>${S.cardholderIsAdmin?'Check the company balance in Alaan and add funds if needed.':'Rana is copied here. Let her know the balance may need a top-up, then try the payment again once funds are available.'}</div>${action}<p>If the balance looks sufficient and it still does not work, reply to me and I’ll help check it.</p><p>Thanks,<br>Sonia</p>`);
+    }
+    return bodyWrap(`<p>Hi ${cardholder},</p><p>The card is funded and ready, but it has not been used yet.</p><p>You do not need to wait for the perfect first purchase. Move one expense the company already pays onto the Alaan card — a software subscription, an ad account or a travel booking is enough to get started.</p><p>Once the first transaction goes through, you will see it in Alaan immediately and can attach the receipt there.</p>${btn('Use the card','card-detail')}<p>If something is stopping you from using it, reply to me and tell me what it is.</p><p>Thanks,<br>Sonia</p>`);
+  }
+  if(slot==='C3.7'){
+    const holder=S.cardholderIsAdmin?'you':PERSON.cardholder_name;
+    return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name} is funded and the first card is active, but there still has not been a purchase.</p><p>Is the card with the right person, is there no upcoming company expense to use it for, or is something about the card blocking the first payment?</p><p>${S.cardholderIsAdmin?'Reply and tell me what is getting in the way.':`${holder} has been receiving the first-spend guidance and you have been copied. Reply and tell me what is getting in the way.`}</p>${btn('Book a quick call','book')}<p>Or just reply to this email and I’ll help from there.</p><p>Thanks,<br>Sonia</p>`);
+  }
+  return _v4RenderEmailBodyBase(slot);
+};
+
+// Make the day-3 email adapt to a real failed first-spend attempt.
+makePurchase = function(){
+  ensureWhiteboardState();
+  const amt=Number(document.getElementById('purchaseAmount').value||0);
+  if(amt>S.balance){
+    S.purchaseDeclined=true;
+    S.lastDeclinedAmount=amt;
+    templates['C3.3'].subject='Your payment was declined — check the balance';
+    templates['C3.3'].preview='The card may be fine; the company balance may be too low.';
+    logAction(`Purchase declined: AED ${amt} > balance AED ${S.balance}`);
+    toast('Payment declined. Sonia’s next first-spend email will explain what to check.');
+    render();
+    return;
+  }
+  const prev=deriveStage();
+  S.balance-=amt;
+  S.purchased=true;
+  S.purchaseDeclined=false;
+  logAction(`First successful purchase: AED ${amt}`);
+  updateStageAfterAction(prev);
+  S.currentView='inbox';
+  toast('Purchase approved. First-spend journey complete.');
+  render();
+};
+
+scenarioPurchase = function(amount){
+  ensureWhiteboardState();
+  if(amount>S.balance){
+    S.purchaseDeclined=true;
+    S.lastDeclinedAmount=amount;
+    templates['C3.3'].subject='Your payment was declined — check the balance';
+    templates['C3.3'].preview='The card may be fine; the company balance may be too low.';
+    logAction(`Scenario action: purchase declined at AED ${amount}`);
+    return false;
+  }
+  const prev=deriveStage();S.balance-=amount;S.purchased=true;S.purchaseDeclined=false;
+  logAction(`Scenario action: purchase succeeded at AED ${amount}`);updateStageAfterAction(prev);return true;
+};
+
+const _v4UpdateSimulatorBase = updateSimulator;
+updateSimulator = function(){
+  _v4UpdateSimulatorBase();
+  ensureWhiteboardState();
+  const flagsEl=document.getElementById('flags');
+  if(flagsEl && S.purchaseDeclined){
+    flagsEl.innerHTML += `<span class="flag on">First spend: declined${S.lastDeclinedAmount?` · AED ${Number(S.lastDeclinedAmount).toLocaleString()}`:''}</span>`;
+  }
+};
+
+// Make the first-spend reviewer labels match the new sequence.
+const c3opt0=document.querySelector('#substageSelect option[value="C3.0"]'); if(c3opt0)c3opt0.textContent='C3.0 · Ready for first spend';
+const c3opt1=document.querySelector('#substageSelect option[value="C3.1"]'); if(c3opt1)c3opt1.textContent='C3.1 · Nothing else to activate';
+const c3opt3=document.querySelector('#substageSelect option[value="C3.3"]'); if(c3opt3)c3opt3.textContent='C3.3 · First-spend nudge / decline help';
+const c3opt7=document.querySelector('#substageSelect option[value="C3.7"]'); if(c3opt7)c3opt7.textContent='C3.7 · Sonia handover to Admin';
+
+// All lifecycle mail remains visibly from Sonia Rahman <sonia@alaanpay.com> in Gmail.
+render();
+</script>
+
+
+<style id="v5FirstSpendStyles">
+  .spend-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0 20px}
+  .spend-tile{border:1px solid #e4e6ef;border-radius:11px;padding:14px;background:#fff;min-height:104px}
+  .spend-tile .ico{font-size:20px;margin-bottom:8px}.spend-tile strong{display:block;color:#1d234f;margin-bottom:4px}.spend-tile span{font-size:12px;color:#70758c;line-height:1.45}
+  .plan-hook{border:1px solid #ded7ff;border-radius:12px;padding:16px 17px;background:linear-gradient(135deg,#f8f5ff,#fff);margin:15px 0 20px}
+  .plan-hook .tag{display:inline-flex;border-radius:12px;background:#ece6ff;color:#5e43c3;font-weight:700;font-size:10px;padding:4px 8px;margin-bottom:9px;text-transform:uppercase;letter-spacing:.05em}
+  .plan-hook h3{margin:0 0 6px;color:#1c2150;font-size:16px}.plan-hook p{margin:0!important;color:#5d627d}
+  .social-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 20px}
+  .social-stat{border:1px solid #e4e6ef;border-radius:10px;padding:14px 12px;background:#fff}
+  .social-stat b{display:block;color:#202548;font-size:20px;line-height:1.1;margin-bottom:6px}.social-stat span{font-size:10px;color:#7b8093;line-height:1.35}
+  .after-spend{border:1px solid #e2e5ef;border-radius:11px;overflow:hidden;margin:14px 0 20px}
+  .after-step{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:13px 14px;background:#fff}.after-step+.after-step{border-top:1px solid #eceef4}
+  .after-n{width:24px;height:24px;border-radius:50%;background:#eee9ff;color:#6547ca;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}.after-step strong{color:#20264d}.after-step div:last-child{color:#666c84;font-size:12px;line-height:1.45}
+  .success-hero{border:1px solid #d7d0ff;background:linear-gradient(135deg,#f6f2ff,#fff);border-radius:14px;padding:19px 20px;margin:14px 0 20px;position:relative;overflow:hidden}
+  .success-hero:after{content:"✦  ✧  ✦";position:absolute;right:18px;top:15px;color:#7456dc;font-size:19px;letter-spacing:5px}.success-hero .big{font-size:20px;font-weight:800;color:#1c2050;margin-bottom:5px}.success-hero .small{color:#636981;font-size:13px}
+  .plan-picker{padding:10px 0;border-top:1px solid #282f57}.plan-picker label{display:block;color:#9fa7d0;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}.plan-picker select{width:100%;border:1px solid #424a74;border-radius:8px;background:#12183a;color:#fff;padding:8px;font-size:11px;outline:none}
+  .source-pill{display:inline-flex;align-items:center;gap:5px;border-radius:12px;background:#f2f4f8;color:#60667b;padding:5px 8px;font-size:10px;margin-bottom:12px}
+  @media(max-width:720px){.spend-grid,.social-stats{grid-template-columns:1fr}}
+</style>
+<script id="v5FirstSpendPatch">
+// v5 · First-spend lifecycle: source-agnostic fund-in, Premium/Starter branches, social proof, post-spend education, and a success email from Sonia.
+
+templates['C4.0']={subject:'Your first Alaan spend is done 🎉',preview:'Here is what to do next.',banner:true,recipient:'cardholder',cta:'card-detail'};
+Object.assign(templates['C3.0'],{subject:'Your funds are ready — where to spend first',preview:'Software, ads, travel and everyday company spend.',banner:true,recipient:'cardholder',cta:'card-detail'});
+Object.assign(templates['C3.1'],{subject:'What companies use Alaan cards for',preview:'3,000+ companies have already moved spend to Alaan.',banner:false,recipient:'cardholder',cta:'card-detail'});
+Object.assign(templates['C3.3'],{subject:'What happens after your first Alaan spend',preview:'The transaction, receipt and reporting all happen in one place.',banner:false,recipient:'cardholder',cta:'card-detail'});
+Object.assign(templates['C3.7'],{subject:'Pick one company expense and start there',preview:'Software, ads or travel — Sonia can help you choose.',banner:false,recipient:'admin',cta:'card-detail'});
+
+const _v5EnsureStateBase=ensureWhiteboardState;
+ensureWhiteboardState=function(){
+  _v5EnsureStateBase();
+  if(!S.plan)S.plan='premium';
+  if(!S.fundingSource)S.fundingSource='unknown';
+  if(typeof S.firstPurchaseAmount!=='number')S.firstPurchaseAmount=0;
+  if(!S.firstPurchaseMerchant)S.firstPurchaseMerchant='';
+};
+
+function v5PlanHook(){
+  ensureWhiteboardState();
+  if(S.plan==='premium'){
+    return `<div class="plan-hook"><div class="tag">Premium plan</div><h3>Earn up to 2% cashback on eligible card spend</h3><p>That includes eligible domestic and international card expenses. Move spend you already have onto Alaan and your plan can start giving value from the first transaction.</p></div>`;
+  }
+  return `<div class="plan-hook"><div class="tag">Starter plan</div><h3>Start with control and visibility</h3><p>Use company cards instead of reimbursements, set card limits and controls, see spend in real time, and capture receipts as the purchase happens.</p></div>`;
+}
+function v5SpendPlaces(){
+  return `<div class="spend-grid"><div class="spend-tile"><div class="ico">◫</div><strong>Software & subscriptions</strong><span>Google Workspace, Microsoft 365, Figma, Zoho and other recurring tools.</span></div><div class="spend-tile"><div class="ico">◎</div><strong>Advertising</strong><span>Meta, Google Ads and the platforms your team already uses to grow.</span></div><div class="spend-tile"><div class="ico">✈</div><strong>Travel</strong><span>Flights, hotels and other business travel expenses.</span></div><div class="spend-tile"><div class="ico">▦</div><strong>Everyday company spend</strong><span>Online vendors, operational tools and regular business purchases.</span></div></div>`;
+}
+function v5Stats(){
+  return `<div class="social-stats"><div class="social-stat"><b>3,000+</b><span>companies manage expenses on Alaan</span></div><div class="social-stat"><b>AED 2.1B+</b><span>in company spend processed through Alaan</span></div><div class="social-stat"><b>5.1M+</b><span>payments made with Alaan cards</span></div></div>`;
+}
+function v5AfterSpend(){
+  return `<div class="after-spend"><div class="after-step"><div class="after-n">1</div><div><strong>The transaction appears in Alaan.</strong><br>You and the finance team get visibility as the spend happens.</div></div><div class="after-step"><div class="after-n">2</div><div><strong>Add the receipt.</strong><br>Share it from your phone, WhatsApp or email so the expense is complete.</div></div><div class="after-step"><div class="after-n">3</div><div><strong>Finance gets a cleaner month-end.</strong><br>Receipts, controls and spend data stay together instead of being rebuilt later.</div></div></div>`;
+}
+
+const _v5RenderEmailBodyBase=renderEmailBody;
+renderEmailBody=function(slot){
+  ensureWhiteboardState();
+  const cardholder=S.cardholderIsAdmin?PERSON.admin_name:PERSON.cardholder_name;
+  if(slot==='C3.0'){
+    const source=S.fundingSource==='self'?'You funded the account directly. ':S.fundingSource==='requested'?'The funding request has landed. ':'';
+    return bodyWrap(`<p>Hi ${cardholder},</p><div class="success-hero"><div class="big">AED ${Number(S.balance).toLocaleString()} is now ready to spend</div><div class="small">${PERSON.company_name}'s active Alaan cards can use the company balance within their card limits.</div></div><p>${source}<strong>How the money got into Alaan does not change how it works now.</strong> Once funds are in the company balance, any active Alaan card can spend from that balance within the controls set on the card.</p><p class="lead">Good places to make the first spend:</p>${v5SpendPlaces()}${v5PlanHook()}${btn('View your card','card-detail')}<p>If you tell me what ${PERSON.company_name} already pays for each month, I can help you pick an easy first expense.</p><p>Thanks,<br>Sonia</p>`,true);
+  }
+  if(slot==='C3.1'){
+    return bodyWrap(`<p>Hi ${cardholder},</p><p>You do not need to invent a test purchase. The easiest way to start is to move one expense the company already pays today onto the Alaan card.</p>${v5Stats()}<p class="lead">Where to start</p>${v5SpendPlaces()}${S.plan==='premium'?`<div class="callout"><strong>Premium hook:</strong> eligible card expenses can earn up to 2% cashback, so recurring spend like software, ads or travel is a natural place to start.</div>`:`<div class="callout"><strong>Starter hook:</strong> every purchase moves you away from reimbursements and gives the finance team real-time visibility, card controls and cleaner receipt collection.</div>`}${btn('Use your card','card-detail')}<p>Thanks,<br>Sonia</p>`);
+  }
+  if(slot==='C3.3' && !S.purchaseDeclined){
+    return bodyWrap(`<p>Hi ${cardholder},</p><p>One reason to make the first purchase is that Alaan starts doing useful work <strong>after</strong> the card is used, not just at checkout.</p><p class="lead">Here is what happens after the spend:</p>${v5AfterSpend()}<div class="callout"><strong>Less reconciliation later.</strong><br>Finance teams using Alaan typically report a 65% reduction in time spent on expense reconciliation.</div>${S.plan==='premium'?`<p>If the purchase is eligible under your Premium plan, cashback is applied according to your plan terms as well.</p>`:`<p>On Starter, the immediate value is the control, visibility and receipt trail around the purchase.</p>`}${btn('Make your first spend','card-detail')}<p>If you are not sure what to use it for, reply with the expense you have in mind and I will help.</p><p>Thanks,<br>Sonia</p>`);
+  }
+  if(slot==='C3.7'){
+    return bodyWrap(`<p>Hi ${PERSON.first_name},</p><p>${PERSON.company_name} is funded and the card is ready, but there still has not been a first purchase.</p><p>Pick one expense you already expect this week — a software renewal, an ad payment or a travel booking — and start there. You do not need to move everything at once.</p>${S.plan==='premium'?`<div class="plan-hook"><div class="tag">Premium</div><h3>Start with spend that can earn cashback</h3><p>Eligible domestic and international card spend can earn up to 2% cashback under the Premium plan.</p></div>`:`<div class="plan-hook"><div class="tag">Starter</div><h3>Start with the expense that is hardest to track</h3><p>Putting it on an Alaan card gives you limits, real-time visibility and a receipt trail without relying on reimbursements.</p></div>`}${btn('Open Alaan','card-detail')}<p>Or reply to this email with what you are trying to pay and I will help you get the first one through.</p><p>Thanks,<br>Sonia</p>`);
+  }
+  if(slot==='C4.0'){
+    const amt=S.firstPurchaseAmount||0, merchant=S.firstPurchaseMerchant||'your first merchant';
+    return bodyWrap(`<p>Hi ${cardholder},</p><div class="success-hero"><div class="big">First Alaan spend done 🎉</div><div class="small">AED ${Number(amt).toLocaleString()} at ${esc(merchant)} went through successfully.</div></div><p>That is the first transaction complete. It is now visible in Alaan for ${PERSON.company_name}, and you can attach the receipt so the expense is finished end to end.</p>${v5AfterSpend()}${S.plan==='premium'?`<div class="plan-hook"><div class="tag">Premium</div><h3>Keep eligible spend working harder</h3><p>Move the next recurring software, advertising or travel expense to Alaan. Eligible card spend can earn up to 2% cashback under your plan.</p></div>`:`<div class="plan-hook"><div class="tag">Starter</div><h3>Now repeat the workflow</h3><p>Move another recurring company expense to Alaan so more spend is controlled, visible and matched with receipts from the start.</p></div>`}<p class="lead">Good next spends:</p>${v5SpendPlaces()}${btn('Open Alaan','card-detail')}<p>If you want, reply and tell me the next expense you are thinking of moving over.</p><p>Thanks,<br>Sonia</p>`,true);
+  }
+  return _v5RenderEmailBodyBase(slot);
+};
+
+// Track how the company was funded for reviewer context, while keeping C3 copy source-agnostic.
+const _v5AddFundsBase=addFunds;
+addFunds=function(){
+  ensureWhiteboardState();
+  S.fundingSource=S.requestFundsSent?'requested':'self';
+  _v5AddFundsBase();
+};
+const _v5ScenarioFundBase=scenarioFund;
+scenarioFund=function(amount,source){ensureWhiteboardState();S.fundingSource=source||S.fundingSource||'self';return _v5ScenarioFundBase(amount);};
+
+// Store the first merchant/amount and send the celebratory email from Sonia immediately after success.
+makePurchase=function(){
+  ensureWhiteboardState();
+  const amount=Number(document.getElementById('purchaseAmount')?.value||0);
+  const merchant=(document.getElementById('merchant')?.value||'Company purchase').trim()||'Company purchase';
+  if(amount>S.balance){
+    S.purchaseDeclined=true;S.lastDeclinedAmount=amount;
+    templates['C3.3'].subject='Your payment was declined — check the balance';
+    templates['C3.3'].preview='The card may be fine; the company balance may be too low.';
+    logAction(`Purchase declined: AED ${amount} > balance AED ${S.balance}`);
+    toast('Payment declined. Sonia’s next email will explain what to check.');render();return;
+  }
+  const prev=deriveStage();
+  S.balance-=amount;S.purchased=true;S.purchaseDeclined=false;S.firstPurchaseAmount=amount;S.firstPurchaseMerchant=merchant;
+  logAction(`First successful purchase: AED ${amount} at ${merchant}`);
+  updateStageAfterAction(prev);
+  deliver('C4.0',{extra:true,exemptCap:true});
+  logAction('First-spend celebration sent immediately from Sonia');
+  S.currentView='inbox';S.currentEmailId=null;
+  toast('Purchase approved. Sonia sent the first-spend celebration.');render();
+};
+scenarioPurchase=function(amount,merchant='Figma'){
+  ensureWhiteboardState();
+  if(amount>S.balance){S.purchaseDeclined=true;S.lastDeclinedAmount=amount;templates['C3.3'].subject='Your payment was declined — check the balance';templates['C3.3'].preview='The card may be fine; the company balance may be too low.';logAction(`Scenario action: purchase declined at AED ${amount}`);return false;}
+  const prev=deriveStage();S.balance-=amount;S.purchased=true;S.purchaseDeclined=false;S.firstPurchaseAmount=amount;S.firstPurchaseMerchant=merchant;logAction(`Scenario action: purchase succeeded at AED ${amount} at ${merchant}`);updateStageAfterAction(prev);deliver('C4.0',{extra:true,exemptCap:true});return true;
+};
+
+function setPlan(v){ensureWhiteboardState();S.plan=v==='starter'?'starter':'premium';logAction(`Reviewer set plan to ${S.plan}`);render();toast(`Plan set to ${S.plan==='premium'?'Premium':'Starter'}. First-spend copy updated.`);}
+
+// Add plan + funding source context to the simulator and expose self-funded first-spend scenarios.
+const _v5InstallWhiteboardUIBase=installWhiteboardUI;
+installWhiteboardUI=function(){
+  _v5InstallWhiteboardUIBase();
+  ensureWhiteboardState();
+  const persona=document.querySelector('.persona-card');
+  if(persona&&!document.getElementById('planSelect')){
+    const box=document.createElement('div');box.className='plan-picker';box.innerHTML=`<label for="planSelect">Customer plan</label><select id="planSelect" onchange="setPlan(this.value)"><option value="premium">Premium · cashback hook</option><option value="starter">Starter · control + visibility hook</option></select>`;persona.insertAdjacentElement('afterend',box);
+  }
+  const plan=document.getElementById('planSelect');if(plan)plan.value=S.plan;
+  const scen=document.getElementById('scenarioSelect');
+  if(scen&&!scen.querySelector('option[value="self-premium"]')){
+    scen.insertAdjacentHTML('beforeend',`<option value="self-premium">Self-funded · Premium · first spend</option><option value="self-starter">Self-funded · Starter · first spend</option><option value="first-spend-success">First spend success · celebration</option>`);
+  }
+  const sub=document.getElementById('substageSelect');
+  if(sub&&!sub.querySelector('option[value="C4.0"]'))sub.insertAdjacentHTML('beforeend',`<option value="C4.0">C4.0 · First spend celebration</option>`);
+  updateSimulator();
+};
+
+const _v5LoadSubstageBase=loadSubstage;
+loadSubstage=function(){
+  const sel=document.getElementById('substageSelect');
+  if(!sel||sel.value!=='C4.0')return _v5LoadSubstageBase();
+  const plan=S.plan||'premium';
+  S=initialState();ensureWhiteboardState();S.plan=plan;S.viewerPersona='cardholder';S.productSelected='card';S.cardCreated=true;S.cardActivated=true;S.funded=true;S.balance=750;S.purchased=true;S.firstPurchaseAmount=250;S.firstPurchaseMerchant='Figma';S.fundingSource='self';
+  deliver('C4.0',{extra:true,exemptCap:true});const e=S.emails.find(x=>x.slot==='C4.0');if(e){e.read=true;S.currentEmailId=e.id;S.currentView='reader';}logAction('Reviewer jumped directly to first-spend celebration');render();toast('Loaded C4.0 for review.');
+};
+
+const _v5RunScenarioBase=runScenario;
+runScenario=function(){
+  const v=document.getElementById('scenarioSelect')?.value;
+  if(!['self-premium','self-starter','first-spend-success'].includes(v))return _v5RunScenarioBase();
+  S=initialState();ensureWhiteboardState();S.viewerPersona='admin';S.plan=v==='self-starter'?'starter':'premium';seed();
+  scenarioSelectCard();rawAdvance(1);scenarioCreateVirtual();rawAdvance(1);scenarioFund(1000,'self');
+  S.viewerPersona='cardholder';
+  if(v==='first-spend-success')scenarioPurchase(250,'Figma');
+  S.currentView='inbox';installWhiteboardUI();render();toast(v==='first-spend-success'?'Loaded the first-spend success journey.':'Loaded a self-funded first-spend journey. Switch plan or persona to compare copy.');
+};
+
+const _v5UpdateSimulatorBase=updateSimulator;
+updateSimulator=function(){
+  _v5UpdateSimulatorBase();ensureWhiteboardState();
+  const plan=document.getElementById('planSelect');if(plan)plan.value=S.plan;
+  const flagsEl=document.getElementById('flags');
+  if(flagsEl){
+    const source=S.fundingSource==='self'?'self-funded':S.fundingSource==='requested'?'Request Funds':'unknown';
+    flagsEl.innerHTML += `<span class="flag on">Plan: ${S.plan==='premium'?'Premium':'Starter'}</span>${S.funded?`<span class="flag on">Funding: ${source}</span>`:''}`;
+  }
+};
+
+const _v5ShowAllTemplatesBase=showAllTemplates;
+showAllTemplates=function(){
+  const order=['C0.0','C0.1','C0.3','C0.7','C1.0','C1.1','C1.3','C1.7','C2.0','C2.1','C2.3','C2.3-RF','C2.7','C2.14','RF.0','RF.3','FT.1','C3.0','C3.1','C3.3','C3.7','C4.0','IM.0'];
+  showModal('Lifecycle email map',`<table class="summary-table"><thead><tr><th>Slot</th><th>Subject</th><th>Primary recipient</th></tr></thead><tbody>${order.filter(k=>templates[k]).map(k=>`<tr><td>${k}</td><td>${esc(templates[k].subject)}</td><td>${templates[k].recipient}</td></tr>`).join('')}</tbody></table>`);
+};
+
+// Preserve Premium/Starter selection on ordinary reset only when the selector exists.
+const _v5ResetBase=resetPrototype;
+resetPrototype=function(){
+  const chosen=document.getElementById('planSelect')?.value||'premium';
+  _v5ResetBase();ensureWhiteboardState();S.plan=chosen;installWhiteboardUI();render();
+};
+
+installWhiteboardUI();
+ensureWhiteboardState();
+render();
+</script>
+
+</body>
+</html>
